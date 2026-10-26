@@ -1,0 +1,8 @@
+# 自訂的指標組。用法：hermes tech 2330 -i mine，或網頁「技術指標」選「我的指標」。
+# 每個參數是什麼，寫在指標旁邊的註解；天數都是交易日。可用的指標類型和參數：hermes indicators
+name: 我的指標
+description: CCI(88)，平均偏差用逐日均線算，和「CCI(88) 穿越 0 線」策略用的一樣
+
+indicators:
+  # 平均偏差用逐日均線算的 CCI，要 2 × 88 − 1 = 175 天才有值。period：典型價格（高 + 低 + 收）÷ 3 的平均天數
+  cci88: {type: cci_rolling_dev, period: 88}

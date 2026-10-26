@@ -1,0 +1,31 @@
+# 出處：Nicolas Darvas《How I Made $2,000,000 in the Stock Market》（1960）的箱型理論（Darvas box）。
+#   原書全文沒查到。下面的規則照網路上轉載的 Darvas 原文（x-trader.net 論壇），
+#   以及看盤軟體 ShareScope、BullCharts 的說明整理，幾個來源一致：
+#   - 箱頂：這段上漲的最高價，之後連續 3 天都沒有碰到或超過。箱底：箱頂確定以後，用相反的方法找最低價。
+#     Darvas 另一本書《You Can Still Make It In The Market》的書摘也寫連續 3 天。
+#   - 價格突破箱頂，就算只多一點點，就買進。
+#   - 停損：剛突破時放在突破的箱頂下面一點；新箱子的箱底確定以後，停損往上移到新箱底下面一點。
+#   - 「這段上漲」要創幾日新高才算，原文沒有數字；252 天是 ShareScope 的預設（BullCharts 用 250 天）。
+# 參數（可以自己改）：
+#   new_high_days：最高價要創幾日新高（含當天），才開始找箱子。
+#   confirm_days：箱頂之後連續幾天的最高價都比它低，箱頂才確定；箱底一樣，要連續幾天的最低價都比它高。
+# 和原本的做法不同的地方：
+#   - 原本盤中突破箱頂就買、盤中碰到停損就賣；hermes 收盤後判斷、下一個交易日開盤成交。
+#   - Darvas 選股時也看成交量和公司獲利，這裡只看價格。
+#   - 《You Can Still Make It In The Market》另外說第一次突破時設 10% 停損，這裡沒有。
+#   - 原本交易的是 1950 年代的美股。
+name: Darvas 箱型（突破箱頂買進）
+description: 最高價突破箱頂時買進；最低價跌破停損線時賣出。停損線先放在剛突破的箱頂，新箱子成形後移到新箱底。箱頂、箱底要連續 3 天沒有被突破才算確定。出處：Darvas《How I Made $2,000,000 in the Stock Market》（1960）。
+
+indicators:
+  box: {type: darvas, new_high_days: 252, confirm_days: 3}
+
+buy: {left: high, op: gt, right: {ref: box.top, ago: 1}}    # 最高價突破昨天還在的箱頂
+sell: {left: low, op: lt, right: {ref: box.stop, ago: 1}}   # 最低價跌破昨天的停損線
+
+# 形成中（只顯示在每日選股，不影響買賣）：箱子已經成形、價格還在箱子裡，等突破箱頂。
+#   箱頂、箱底只在箱子成形、還沒被突破或跌破的日子有值，這兩個條件成立就代表今天收盤時箱子還在。
+forming:
+  all:
+    - {left: close, op: lte, right: box.top}      # 收盤不高於箱頂
+    - {left: close, op: gte, right: box.bottom}   # 收盤不低於箱底

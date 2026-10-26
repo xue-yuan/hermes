@@ -1,0 +1,17 @@
+# 自訂條件：CCI(88) 由下往上穿越 0 線買進、由上往下穿越 0 線賣出。
+# CCI 用平均偏差以逐日均線算的版本（cci_rolling_dev）。
+#   標準算法（cci）的數值大很多，但兩種的分子都是「典型價格 − 88 日平均」、分母都是正數，正負號一定相同，
+#   所以穿越 0 的日子完全一樣；只差在逐日均線版要 2 × 88 − 1 = 175 天才有值，回測晚幾個月開始。
+# hermes 收盤後判斷、下一個交易日開盤成交。
+name: CCI(88) 穿越 0 線
+description: CCI(88) 由下往上穿越 0 時買進；由上往下穿越 0 時賣出。CCI 的平均偏差用逐日均線算。
+
+indicators:
+  cci88: {type: cci_rolling_dev, period: 88}   # period：典型價格（高 + 低 + 收）÷ 3 的平均天數
+
+buy: {left: cci88, op: crosses_above, right: 0}    # 由下往上穿越 0 線
+sell: {left: cci88, op: crosses_below, right: 0}   # 由上往下穿越 0 線
+
+# 圖上另外畫的參考線，只畫線、不影響買賣：±100 是 CCI 常見的超買、超賣界線
+reference_lines:
+  cci88: [-100, 100]

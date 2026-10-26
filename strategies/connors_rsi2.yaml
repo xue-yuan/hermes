@@ -1,0 +1,20 @@
+# 出處：Larry Connors、Cesar Alvarez《Short Term Trading Strategies That Work》的 2 期 RSI 策略。
+#   股價在 200 日均線之上、2 期 RSI 低於 5 時買進；收盤站上 5 日均線時賣出；不設停損。
+#   StockCharts ChartSchool 的「RSI(2)」整理的規則相同，也提到 Connors 測出 RSI 低於 5 比低於 10 的報酬高。
+# 和原本的做法不同的地方：
+#   - 原本在訊號當天收盤前買進；hermes 收盤後判斷、下一個交易日開盤成交。回測要照原本的做法，用 --exec close。
+#   - 原本測的是美股和 ETF。
+name: Connors RSI(2)
+description: 股價在 200 日均線之上、2 期 RSI 低於 5 時買進；收盤站上 5 日均線時賣出。出處：Connors、Alvarez《Short Term Trading Strategies That Work》。
+
+indicators:
+  rsi2:  {type: rsi, period: 2}
+  ma200: {type: sma, period: 200}
+  ma5:   {type: sma, period: 5}
+
+buy:
+  all:
+    - {left: close, op: gt, right: ma200}  # 長期趨勢向上
+    - {left: rsi2,  op: lt, right: 5}      # 短期超賣
+
+sell: {left: close, op: gt, right: ma5}    # 反彈站上 5 日均線就出場

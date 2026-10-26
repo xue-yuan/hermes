@@ -1,0 +1,18 @@
+# 出處：Curtis Faith《The Original Turtle Trading Rules》（OriginalTurtles.org，2003）的 System 2。
+#   進場：價格超過前 55 天的最高價。出場：價格跌破前 20 天的最低價。
+#   「前 N 天」不含當天，所以用前一天的唐奇安通道：{ref: dc55.upper, ago: 1} 是到昨天為止 55 天的最高價。
+#   當天的最高價超過它，就是盤中突破過；最低價跌破前 20 天的最低價，就是盤中跌破過。
+# 和原本的做法不同的地方（策略設定檔做不到）：
+#   - 原本在盤中突破的價格成交；hermes 收盤後判斷、下一個交易日開盤成交。
+#   - 原本一定設 2N 停損（N 是 20 日 ATR），而且分批加碼、依波動決定部位大小；這裡都沒有，只靠 20 日低點出場。
+#   - 原本也放空；這裡只做多。
+#   - 原本交易的是美國期貨。
+name: 海龜 System 2（55 日突破，20 日低點出場）
+description: 最高價超過前 55 天的最高價時買進；最低價跌破前 20 天的最低價時賣出。出處：Curtis Faith《The Original Turtle Trading Rules》。沒有原本的 2N 停損和加碼。
+
+indicators:
+  dc55: {type: donchian, period: 55}
+  dc20: {type: donchian, period: 20}
+
+buy: {left: high, op: gt, right: {ref: dc55.upper, ago: 1}}   # 突破前 55 天的最高價
+sell: {left: low, op: lt, right: {ref: dc20.lower, ago: 1}}   # 跌破前 20 天的最低價

@@ -1,0 +1,65 @@
+# 常用版技術指標：參數用指標原作者的設定，或台股常見的設定。
+# 每個指標都有自己的名稱。要用自訂參數，就另外取一個名稱，例如 rsi_mine: {type: rsi, period: 10}，
+# 可以加在這裡，也可以另開一個檔案（hermes tech 2330 -i 檔名）；常用版不受影響。名稱重複會報錯。
+# 每個參數是什麼，寫在指標旁邊的註解；天數都是交易日。可用的指標類型和參數：hermes indicators
+name: 常用指標
+description: 均線、KD、RSI、MACD、布林通道、Darvas 箱型等常用指標，參數用常見的設定
+
+indicators:
+  # 均線：週線、雙週線、月線、季線、半年線、年線。period：幾天的收盤價平均
+  ma5:    {type: sma, period: 5}
+  ma10:   {type: sma, period: 10}
+  ma20:   {type: sma, period: 20}
+  ma60:   {type: sma, period: 60}
+  ma120:  {type: sma, period: 120}
+  ma240:  {type: sma, period: 240}
+  # 指數移動平均：越近的收盤價權重越大。period：天數
+  ema12:  {type: ema, period: 12}
+  ema26:  {type: ema, period: 26}
+  # 乖離率：收盤價離均線幾 %。period：均線天數
+  bias20: {type: bias, period: 20}    # 月線乖離率
+  bias60: {type: bias, period: 60}    # 季線乖離率
+
+  # 動能、擺盪
+  # KD：period 是看幾天的最高、最低價（算 RSV）；k_smooth、d_smooth 是平滑，3 就是「今天的 K = 昨天的 K × 2/3 + RSV × 1/3」，D 對 K 也一樣
+  kd:         {type: kd, period: 9, k_smooth: 3, d_smooth: 3}
+  # RSI：period 是天數，漲跌幅用 Wilder 平滑
+  rsi6:       {type: rsi, period: 6}
+  rsi14:      {type: rsi, period: 14}                  # Wilder 原始設定
+  # MACD：fast、slow 是快線、慢線的指數移動平均天數，兩者相減是 DIF；signal 是 DIF 再取幾天的指數移動平均
+  macd:       {type: macd, fast: 12, slow: 26, signal: 9}
+  cci20:      {type: cci, period: 20}                  # 常見設定。period：典型價格（高 + 低 + 收）÷ 3 的平均天數
+  willr14:    {type: williams_r, period: 14}           # period：看幾天的最高、最低價
+  roc12:      {type: roc, period: 12}                  # period：和幾天前的收盤價比
+  trix15:     {type: trix, period: 15}                 # period：三次指數移動平均，每次的天數
+  stochrsi14: {type: stoch_rsi, period: 14}            # period：RSI 的天數，也是看幾天 RSI 的最高、最低
+  psy12:      {type: psy, period: 12}                  # period：幾天裡有幾天上漲
+
+  # 通道、波動
+  bb:     {type: bollinger, period: 20, k: 2}    # 布林通道。period：均線天數；k：上下軌離均線幾個標準差
+  kc:     {type: keltner, period: 20, k: 2}      # 肯特納通道。period：指數移動平均和 ATR 的天數；k：上下軌離中線幾個 ATR
+  dc20:   {type: donchian, period: 20}           # 唐奇安通道。period：幾天（含當天）的最高價、最低價
+  atr14:  {type: atr, period: 14}                # 平均真實波幅。period：天數，用 Wilder 平滑
+
+  # 趨勢
+  dmi:        {type: adx, period: 14}            # period：天數，用 Wilder 平滑
+  # 一目均衡表：tenkan、kijun 是轉換線、基準線看幾天的最高、最低價；senkou 是先行帶 B 看幾天；先行帶往前移 kijun 天
+  ichimoku:   {type: ichimoku, tenkan: 9, kijun: 26, senkou: 52}
+  # 拋物線 SAR：step 是加速因子的起始值，每創一次新高（空頭時新低）就加 step；max_step 是上限
+  sar:        {type: sar, step: 0.02, max_step: 0.2}
+  supertrend: {type: supertrend, period: 10, multiplier: 3}   # period：ATR 天數；multiplier：軌道離（最高 + 最低）÷ 2 幾個 ATR
+
+  # 型態
+  # Darvas 箱型：box.top 箱頂、box.bottom 箱底（箱子成形以後才有值）、box.stop 停損線。
+  #   new_high_days：最高價要創幾日新高（含當天），才開始找箱子；252 是 ShareScope 的預設。
+  #   confirm_days：箱頂之後連續幾天的最高價都比它低，箱頂才確定；箱底一樣，要連續幾天的最低價都比它高。3 是 Darvas 的設定。
+  darvas: {type: darvas, new_high_days: 252, confirm_days: 3}
+  # K 線長度：candle.body 實體（收盤和開盤差多少）、candle.upper_shadow 上影線、candle.lower_shadow 下影線，沒有參數
+  candle: {type: candle}
+
+  # 量能
+  obv:    {type: obv}                          # 能量潮：收盤上漲那天加成交量、下跌那天減，沒有參數
+  mfi14:  {type: mfi, period: 14}              # period：天數
+  cmf20:  {type: cmf, period: 20}              # period：天數
+  vwap20: {type: vwap, period: 20}             # period：幾天的成交量加權平均價
+  vr20:   {type: volume_ratio, period: 20}     # 量比：當天成交量 ÷ 20 日均量（含當天）。period：均量天數

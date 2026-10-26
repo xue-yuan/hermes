@@ -1,0 +1,13 @@
+# 出處：Jeremy Siegel《Stocks for the Long Run》用 200 日均線進出道瓊工業指數：
+#   收盤高於 200 日均線至少 1% 時買進；低於至少 1% 時賣出。1% 的帶寬是為了減少來回洗的假訊號。
+#   Brock、Lakonishok、LeBaron（1992，Journal of Finance）也測了同一條規則（1 日對 200 日均線、1% 帶寬）。
+#   乖離率 =（收盤 − 200 日均線）÷ 200 日均線 × 100，所以「高於均線至少 1%」就是乖離率 ≥ 1。
+# 和原本的做法不同的地方：原本測的是指數，不是個股。
+name: Siegel 200 日均線（±1%）
+description: 收盤高於 200 日均線至少 1% 時買進；低於至少 1% 時賣出。出處：Jeremy Siegel《Stocks for the Long Run》；Brock、Lakonishok、LeBaron（1992）。
+
+indicators:
+  bias200: {type: bias, period: 200}
+
+buy: {left: bias200, op: gte, right: 1}     # 高於 200 日均線至少 1%
+sell: {left: bias200, op: lte, right: -1}   # 低於 200 日均線至少 1%

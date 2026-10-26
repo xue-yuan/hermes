@@ -1,0 +1,16 @@
+# 出處：J. Welles Wilder《New Concepts in Technical Trading Systems》（1978）的拋物線系統（Parabolic SAR）。
+#   加速因子從 0.02 開始，每創一次新高（新低）加 0.02，最多 0.20；這是 Wilder 用的數值（ICE、eSignal 的指標說明）。
+#   SAR 在股價下面是多頭，持有；股價跌破 SAR 就停損出場；股價漲過 SAR 時再買進。
+#   引擎算的 SAR 和 TA-Lib 相同，反轉那一天就換成新的值，所以收盤在 SAR 之上就是多頭、之下就是空頭。
+# 和原本的做法不同的地方：
+#   - 原本盤中碰到 SAR 就在 SAR 的價格反轉；hermes 收盤後判斷、下一個交易日開盤成交。
+#   - 原本永遠在市場裡，空頭時放空；這裡只做多，空頭時空手。
+#   - Wilder 估計市場只有約三成的時間有趨勢，盤整時會一直被來回停損。
+name: Wilder 拋物線 SAR
+description: 收盤在 SAR 之上（多頭）時買進；收盤跌到 SAR 之下（空頭）時賣出。加速因子 0.02，最多 0.20。出處：Wilder《New Concepts in Technical Trading Systems》（1978）。
+
+indicators:
+  sar: {type: sar, step: 0.02, max_step: 0.2}
+
+buy: {left: close, op: gt, right: sar}    # 多頭：SAR 在股價下面
+sell: {left: close, op: lt, right: sar}   # 空頭：股價跌破 SAR
