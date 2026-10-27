@@ -156,7 +156,10 @@ def _ml_progress():
 
 
 def _costs(fee_discount: float, slippage: float, tax: float) -> CostModel:
-    return CostModel(discount=fee_discount, slippage=slippage, tax=tax)
+    try:
+        return CostModel(discount=fee_discount, slippage=slippage, tax=tax)
+    except ValueError as exc:
+        _fail(str(exc))
 
 
 def _etf_tax_note(stock: str, tax: float) -> None:
@@ -1026,6 +1029,7 @@ def backtest(
         return
     if adjust:
         _fail("--adjust 只用在策略設定檔；機器學習策略和買進持有本來就用還原價格")
+    _etf_tax_note(stock, tax)
     loader = _loader()
     try:
         params = parse_params(get_strategy(strategy), param or [])
@@ -1102,11 +1106,17 @@ def compare(
         str | None, typer.Option(help="起始日（預設為所有策略都有訊號的第一天）")
     ] = None,
     end: str | None = None,
-    execution: Annotated[str, typer.Option("--exec")] = "open",
-    fee_discount: float = 1.0,
+    execution: Annotated[
+        str,
+        typer.Option("--exec", help="成交方式：open=次日開盤（預設）、close=當日收盤"),
+    ] = "open",
+    fee_discount: Annotated[
+        float, typer.Option(help="手續費折扣，例如 0.28 代表 2.8 折")
+    ] = 1.0,
     slippage: Annotated[
         float, typer.Option(help="單邊滑價；開盤、收盤都是集合競價，預設 0")
     ] = 0.0,
+    tax: Annotated[float, typer.Option(help="證交稅（ETF 請設 0.001）")] = 0.003,
     sort: Annotated[
         str, typer.Option(help="排序依據：sharpe、cagr、calmar、max_drawdown")
     ] = "sharpe",
@@ -1130,6 +1140,7 @@ def compare(
         _fail("請用 -s 指定要比較的策略，例如 -s connors_rsi2")
     if execution not in ("open", "close"):
         _fail("--exec 只能是 open 或 close")
+    _etf_tax_note(stock, tax)
     loader = _loader()
     try:
         with _ml_progress() as on_progress:
@@ -1138,7 +1149,7 @@ def compare(
                 names,
                 start,
                 end,
-                _costs(fee_discount, slippage, 0.003),
+                _costs(fee_discount, slippage, tax),
                 execution,
                 sort,
                 loader,

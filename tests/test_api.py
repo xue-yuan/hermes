@@ -510,6 +510,18 @@ def test_chart_layout_draws_only_used_lines():
     assert chart_layout(parse_strategy({**s.model_dump(exclude_none=True), "forming": forming})) == layout
 
 
+def test_threshold_follows_the_line_not_the_indicator():
+    """同一個指標的線分在價格圖和子圖（布林通道的下緣在價格圖、%b 在子圖）：門檻畫在左邊那條線所在的圖。"""
+    s = parse_strategy({"name": "t", "indicators": {"bb": {"type": "bollinger", "period": 20, "k": 2}},
+                        "buy": {"all": [{"left": "close", "op": "lt", "right": "bb.lower"},
+                                        {"left": "bb.pct_b", "op": "lt", "right": 0.05}]},
+                        "sell": {"left": "bb.lower", "op": "gt", "right": 120}})
+    layout = chart_layout(s)
+    assert layout.overlays == ["bb.lower"]
+    assert layout.panels == {"bb": ["bb.pct_b"]}
+    assert layout.thresholds == {"bb": [0.05], "price": [120.0]}
+
+
 def test_volume_threshold_is_in_lots(client, env):
     _, sdir, _ = env
     (sdir / "vol.yaml").write_text("name: 爆量\nbuy: {left: volume, op: gt, right: 3000000}\n"
@@ -743,6 +755,22 @@ def test_bad_input(client, url, status):
     r = client.get(url)
     assert r.status_code == status, (url, r.text)
     assert "detail" in r.json()
+
+
+@pytest.mark.parametrize(("url", "message"), [
+    ("/api/stocks/1234/backtest?strategy=cross&fee_discount=0", "手續費折扣要大於 0"),
+    ("/api/stocks/1234/backtest?strategy=cross&tax=abc", "證交稅要是數字"),
+    ("/api/stocks/1234/backtest?strategy=cross&slippage=0.5", "單邊滑價要小於 0.1"),
+    ("/api/stocks/1234/backtest?strategy=cross&start=2024-13-01", "起始日要是正確的日期（YYYY-MM-DD）"),
+    ("/api/stocks/1234/chips?days=0", "明細天數要大於 0"),
+    ("/api/stocks/1234/backtest", "沒有指定策略"),
+    ("/api/stocks/1234567", "股票代號的格式不對"),
+])
+def test_bad_input_message_is_plain_chinese(client, url, message):
+    """網址參數格式不對：網頁直接顯示這段訊息，要是中文、用畫面上的名稱，不是程式的參數名稱。"""
+    r = client.get(url)
+    assert r.status_code == 422
+    assert r.json() == {"detail": message}
 
 
 def test_missing_stock_message(client):

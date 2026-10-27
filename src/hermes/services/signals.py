@@ -276,8 +276,9 @@ def chart_layout(strategy: RuleStrategy) -> ChartLayout:
     levels: dict[str, set[float]] = {}
     for cond in strategy.conditions(forming=False):
         if isinstance(cond.right, float):
-            base = ref_parts(cond.left)[0].split(".")[0]
-            key = "price" if base in on_price else base
+            # 看左邊那條線畫在哪：同一個指標可能有的線在價格圖、有的在子圖（例如布林通道的下緣和 %b）
+            left = ref_parts(cond.left)[0]
+            key = "price" if left in {"open", "high", "low", "close", *overlays} else left.split(".")[0]
             levels.setdefault(key, set()).add(cond.right)
     refs: dict[str, set[float]] = {}
     for name, values in strategy.reference_lines.items():

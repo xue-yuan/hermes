@@ -54,6 +54,8 @@ def test_trade_extraction(prices):
 def test_drawdown_and_sharpe():
     eq = pd.Series([1.0, 1.2, 0.6, 0.9, 1.3])
     assert m.max_drawdown(eq)["mdd"] == pytest.approx(-0.5)
+    # 期初的本金 1 也算最高點：第一天就跌到 0.9，之後最低 0.8，最大回撤是 −20%，三天都在水下
+    assert m.max_drawdown(pd.Series([0.9, 0.95, 0.8])) == {"mdd": pytest.approx(-0.2), "duration": 3}
     r = pd.Series(np.random.default_rng(1).normal(0.001, 0.01, 5000))
     assert m.sharpe(r, 244) == pytest.approx(r.mean() / r.std() * np.sqrt(244))
 
@@ -99,3 +101,17 @@ def test_psr_and_dsr():
     trials = rng.normal(0.0, 0.02, 100)
     assert m.deflated_sharpe_ratio(good, trials) <= m.probabilistic_sharpe_ratio(good)
     assert m.expected_max_sharpe(1000, 0.01) > m.expected_max_sharpe(10, 0.01) > 0
+
+
+@pytest.mark.parametrize("kwargs, message", [
+    ({"tax": -1.0}, "證交稅"),
+    ({"tax": 0.1}, "證交稅"),
+    ({"discount": 0.0}, "手續費折扣"),
+    ({"discount": 1.5}, "手續費折扣"),
+    ({"slippage": -0.001}, "單邊滑價"),
+    ({"commission": -0.001}, "手續費率"),
+])
+def test_cost_model_rejects_out_of_range(kwargs, message):
+    """超出範圍的成本會算出沒有意義的報酬（例如負的證交稅），一律報錯；範圍和網頁 API 相同。"""
+    with pytest.raises(ValueError, match=message):
+        CostModel(**kwargs)

@@ -81,7 +81,8 @@ def reference_metrics(returns: list[float], dates: list[date], position: list[fl
         "psr": 0.5 * (1 + math.erf(z / math.sqrt(2))),
         "calmar": cagr / abs(min(dd)),
         "exposure": sum(1 for w in position if abs(w) > 1e-9) / n,
-        "turnover": sum(abs(position[i] - position[i - 1]) for i in range(1, n)) / years,
+        # 期初空手：第一天就有部位也算一次買進
+        "turnover": sum(abs(position[i] - (position[i - 1] if i else 0.0)) for i in range(n)) / years,
         "trades": len(trades),
         "win_rate": sum(1 for r in rets if r > 0) / len(rets),
         "avg_trade": _mean(rets),
@@ -93,21 +94,28 @@ def reference_metrics(returns: list[float], dates: list[date], position: list[fl
     }
 
 
-def _case(seed: int):
-    """隨機的交易日曆（平日扣掉休市日）、報酬、0／1 部位，以及基準報酬。"""
+def _case(seed: int, holding_first: bool = False):
+    """隨機的交易日曆（平日扣掉休市日）、報酬、0／1 部位，以及基準報酬。
+
+    holding_first：第一天就持有，而且第一天大跌 40%（最大回撤要從期初的本金算起）。
+    """
     rng = np.random.default_rng(seed)
     days = pd.bdate_range("2021-01-04", "2024-06-28")
     days = days.delete(rng.choice(np.arange(1, len(days) - 1), size=60, replace=False))
     n = len(days)
     position = pd.Series((rng.random(n) < 0.03).cumsum() % 2, index=days, dtype=float)  # 隨機進出約 20 次
+    if holding_first:
+        position = 1.0 - position
     bench = pd.Series(rng.normal(0.0004, 0.012, n), index=days)
     returns = (position * (bench + rng.normal(0.0002, 0.006, n))).where(position > 0, 0.0)
+    if holding_first:
+        returns.iloc[0] = -0.4
     return returns, position, bench
 
 
-@pytest.mark.parametrize("seed", [1, 2, 3])
-def test_every_metric_matches_definition(seed):
-    returns, position, bench = _case(seed)
+@pytest.mark.parametrize("seed, holding_first", [(1, False), (2, False), (3, False), (4, True)])
+def test_every_metric_matches_definition(seed, holding_first):
+    returns, position, bench = _case(seed, holding_first)
     trades = extract_trades(returns, position)
     ours = m.summarize(returns, position, trades, bench)
     ref = reference_metrics(returns.tolist(), [d.date() for d in returns.index], position.tolist(), bench.tolist())

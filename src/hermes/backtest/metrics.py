@@ -60,20 +60,19 @@ def sortino(returns: pd.Series, periods: float, rf: float = 0.0) -> float:
 
 
 def drawdown(equity: pd.Series) -> pd.Series:
-    return equity / equity.cummax() - 1.0
+    """淨值離之前的最高點跌了多少。期初的本金（淨值 1）也算最高點，第一天就賠錢也是回撤。"""
+    return equity / equity.cummax().clip(lower=1.0) - 1.0
 
 
 def max_drawdown(equity: pd.Series) -> dict:
     dd = drawdown(equity)
     if dd.empty:
-        return {"mdd": float("nan"), "peak": None, "trough": None, "duration": 0}
-    trough = dd.idxmin()
-    peak = equity.loc[:trough].idxmax()
+        return {"mdd": float("nan"), "duration": 0}
     # 最長水下期間（交易日）
     underwater = (dd < 0).astype(int)
     groups = (underwater.diff() != 0).cumsum()
     longest = int(underwater.groupby(groups).sum().max()) if underwater.any() else 0
-    return {"mdd": float(dd.min()), "peak": peak, "trough": trough, "duration": longest}
+    return {"mdd": float(dd.min()), "duration": longest}
 
 
 def probabilistic_sharpe_ratio(returns: pd.Series, sr_benchmark: float = 0.0) -> float:
@@ -172,8 +171,10 @@ def summarize(
     )
     if position is not None:
         out["exposure"] = float((position.abs() > 1e-9).mean())
+        # 期初空手（和回測引擎相同），第一天就有部位也是一次買進
+        change = position.diff().fillna(position.iloc[0]) if len(position) else position
         out["turnover"] = (
-            float(position.diff().abs().sum() / years) if years > 0 else float("nan")
+            float(change.abs().sum() / years) if years > 0 else float("nan")
         )
     if trades is not None:
         out.update(trade_stats(trades))

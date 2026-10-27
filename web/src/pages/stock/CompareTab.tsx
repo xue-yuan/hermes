@@ -8,14 +8,15 @@ import { EquityChart } from "@/components/charts/EquityChart"
 import { ADJUSTED_HELP, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type Compare, type Metrics, type StockInfo } from "@/lib/api"
-import { SORT_LABELS, num, pct, tone } from "@/lib/format"
+import { METRIC_HELP, SORT_LABELS, num, pct, tone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { COST_FIELDS, CostInputs, costText } from "@/pages/stock/costs"
+import { EQUITY_CAPTION, MetricHelp } from "@/pages/stock/BacktestTab"
 import { StrategyChecks } from "@/pages/stock/shared"
 import { useSearchParams } from "react-router"
 
 const RANK: [string, string, (m: Metrics) => string, string?][] = [
-  ["cagr", "CAGR", (m) => pct(m.cagr), "cagr"],
+  ["cagr", "年化報酬", (m) => pct(m.cagr), "cagr"],
   ["sharpe", "Sharpe", (m) => num(m.sharpe)],
   ["max_drawdown", "最大回撤", (m) => pct(m.max_drawdown)],
   ["calmar", "Calmar", (m) => num(m.calmar)],
@@ -122,7 +123,7 @@ function CompareView({ c, dark }: { c: Compare; dark: boolean }) {
               <TableRow>
                 <TableHead>策略</TableHead>
                 {RANK.map(([k, label]) => (
-                  <TableHead key={k} className="text-right">
+                  <TableHead key={k} className="text-right" title={METRIC_HELP[k]}>
                     {label}
                   </TableHead>
                 ))}
@@ -144,12 +145,14 @@ function CompareView({ c, dark }: { c: Compare; dark: boolean }) {
               ))}
             </TableBody>
           </Table>
+          <MetricHelp items={RANK.map(([k, label]) => [k, label])} />
         </CardContent>
       </Card>
       <Warnings items={c.warnings} />
       <Card className="py-2">
         <CardContent className="px-2">
           <EquityChart curves={c.curves} dark={dark} />
+          <p className="px-2 text-xs text-muted-foreground">{EQUITY_CAPTION}</p>
         </CardContent>
       </Card>
       <p className="text-xs text-muted-foreground">

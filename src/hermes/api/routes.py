@@ -17,6 +17,7 @@ from fastapi import Path as PathParam
 from hermes.api import serialize as js
 from hermes.api.auth import current_user
 from hermes.backtest import BacktestResult, CostModel
+from hermes.backtest.metrics import drawdown
 from hermes.chips import ChipReport
 from hermes.config import indicators_dir, strategies_dir
 from hermes.data import DataLoader
@@ -454,19 +455,15 @@ def _cost_warnings(stock_id: str, costs: CostModel) -> list[str]:
 def _curves(results: list[tuple[str, BacktestResult]], benchmark: pd.Series) -> dict:
     """淨值、回撤、部位；買進持有的淨值放在 benchmark。"""
     index = benchmark.index
-
-    def dd(equity: pd.Series) -> pd.Series:
-        return equity / equity.cummax() - 1
-
     return {
         "date": js.days(index),
-        "benchmark": {"equity": js.values(benchmark), "drawdown": js.values(dd(benchmark))},
+        "benchmark": {"equity": js.values(benchmark), "drawdown": js.values(drawdown(benchmark))},
         "series": [
             {
                 "id": key,
                 "name": r.name,
                 "equity": js.values(r.equity.reindex(index)),
-                "drawdown": js.values(dd(r.equity).reindex(index)),
+                "drawdown": js.values(drawdown(r.equity).reindex(index)),
                 "position": js.values(r.position.reindex(index)),
             }
             for key, r in results

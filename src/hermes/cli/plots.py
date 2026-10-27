@@ -11,6 +11,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
+from hermes.backtest.metrics import drawdown
 from hermes.services import chart_layout
 
 plt.rcParams["font.sans-serif"] = [
@@ -177,10 +178,10 @@ def plot_backtests(results: list, title: str, path: Path) -> Path:
     for k, r in enumerate(results):
         c = COLORS[k % len(COLORS)]
         axes[0].plot(r.equity.index, r.equity, color=c, linewidth=1.2, label=r.name)
-        dd = r.equity / r.equity.cummax() - 1
+        dd = drawdown(r.equity)
         axes[1].plot(dd.index, dd * 100, color=c, linewidth=0.9)
         axes[2].plot(r.position.index, r.position, color=c, linewidth=0.8, alpha=0.8)
-    bdd = bench / bench.cummax() - 1
+    bdd = drawdown(bench)
     axes[1].fill_between(bdd.index, bdd * 100, 0, color="black", alpha=0.08)
     axes[0].set_yscale("log")
     axes[0].set_title(title)

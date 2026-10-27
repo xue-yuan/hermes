@@ -8,7 +8,7 @@ import { EquityChart } from "@/components/charts/EquityChart"
 import { ADJUSTED_HELP, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type Backtest, type Metrics, type StockInfo, type Trade } from "@/lib/api"
-import { METRIC_ROWS, pct, price, tone } from "@/lib/format"
+import { METRIC_HELP, METRIC_ROWS, pct, price, tone } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { COST_FIELDS, CostInputs, costText, type CostForm } from "@/pages/stock/costs"
 import { StrategyRules, StrategySelect } from "@/pages/stock/shared"
@@ -41,32 +41,57 @@ export function useForm(): [CostForm & { strategy: string }, (f: Record<string, 
 export function MetricsTable({ cols }: { cols: { name: string; metrics: Metrics }[] }) {
   const rows = METRIC_ROWS.filter(([k]) => cols.some((c) => k in c.metrics))
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>指標</TableHead>
-          {cols.map((c) => (
-            <TableHead key={c.name} className="text-right">
-              {c.name}
-            </TableHead>
-          ))}
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {rows.map(([k, label, fmt]) => (
-          <TableRow key={k}>
-            <TableCell className="font-medium">{label}</TableCell>
+    <>
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>指標</TableHead>
             {cols.map((c) => (
-              <TableCell key={c.name} className="text-right tabular-nums">
-                {k in c.metrics ? fmt(c.metrics[k]) : "—"}
-              </TableCell>
+              <TableHead key={c.name} className="text-right">
+                {c.name}
+              </TableHead>
             ))}
           </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+        </TableHeader>
+        <TableBody>
+          {rows.map(([k, label, fmt]) => (
+            <TableRow key={k}>
+              <TableCell className="font-medium" title={METRIC_HELP[k]}>
+                {label}
+              </TableCell>
+              {cols.map((c) => (
+                <TableCell key={c.name} className="text-right tabular-nums">
+                  {k in c.metrics ? fmt(c.metrics[k]) : "—"}
+                </TableCell>
+              ))}
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+      <MetricHelp items={rows.map(([k, label]) => [k, label])} />
+    </>
   )
 }
+
+/** 績效指標的白話說明，預設收起來；手機上沒有滑鼠移過去的提示，所以另外列出來。 */
+export function MetricHelp({ items }: { items: [string, string][] }) {
+  return (
+    <details className="mt-3 text-sm">
+      <summary className="cursor-pointer text-muted-foreground">這些數字是什麼意思</summary>
+      <dl className="mt-2 space-y-1">
+        {items.map(([k, label]) => (
+          <div key={k}>
+            <dt className="inline font-medium">{label}：</dt>
+            <dd className="inline text-muted-foreground">{METRIC_HELP[k]}</dd>
+          </div>
+        ))}
+      </dl>
+    </details>
+  )
+}
+
+export const EQUITY_CAPTION =
+  "上：淨值，一開始的資金當成 1，之後變成多少（對數刻度，同樣幾 % 的漲跌看起來一樣長）；中：回撤，離之前最高的淨值跌了幾 %；下：部位，1 是持股、0 是空手。"
 
 function Trades({ trades }: { trades: Trade[] }) {
   return (
@@ -216,7 +241,7 @@ function BacktestView({ b, dark }: { b: Backtest; dark: boolean }) {
       <Card className="py-2">
         <CardContent className="px-2">
           <EquityChart curves={b.curves} dark={dark} />
-          <p className="px-2 text-xs text-muted-foreground">上：淨值（對數刻度）；中：回撤 %；下：部位。</p>
+          <p className="px-2 text-xs text-muted-foreground">{EQUITY_CAPTION}</p>
         </CardContent>
       </Card>
       <Card>
