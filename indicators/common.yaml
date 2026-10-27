@@ -54,6 +54,12 @@ indicators:
   #   new_high_days：最高價要創幾日新高（含當天），才開始找箱子；252 是 ShareScope 的預設。
   #   confirm_days：箱頂之後連續幾天的最高價都比它低，箱頂才確定；箱底一樣，要連續幾天的最低價都比它高。3 是 Darvas 的設定。
   darvas: {type: darvas, new_high_days: 252, confirm_days: 3}
+  # 波段轉折點（百分比反轉，又叫 ZigZag）：swing.peak 最近確定的高點、swing.trough 最近確定的低點，都是收盤價。
+  #   收盤價從最高收盤價回跌 percent% 那天，那個最高收盤價才確定是高點；低點相反，要從最低收盤價回漲 percent%。
+  #   所以轉折點要等幾天才知道，從確定那天起才有值，之後不會改。做法照 Osler（1998，紐約聯邦準備銀行 Staff Report 42）。
+  #   percent：反轉幅度（%）。10 是 Arthur Merrill 對個股的建議（〈Swing Expectations〉，Technical Analysis of
+  #   Stocks & Commodities 第 6 卷，1988）；Merrill 的跌幅用低點當分母（從 110 跌到 100 他算 10%），這裡用高點當分母（算 9.09%）。
+  swing:  {type: swing, percent: 10}
   # K 線長度：candle.body 實體（收盤和開盤差多少）、candle.upper_shadow 上影線、candle.lower_shadow 下影線，沒有參數
   candle: {type: candle}
 

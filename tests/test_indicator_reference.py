@@ -437,3 +437,53 @@ def _darvas(p, a):
         out.append(({"new_high_days": days, "confirm_days": k},
                     {"top": (top, 0), "bottom": (bottom, 0), "stop": (stop, 0)}))
     return out
+
+
+def _swing_events(close, percent):
+    """照定義一段一段搜尋，不用狀態變數：每一步都直接找「第一個符合定義的日子」。
+
+    1. 第一個轉折點：第一個「收盤 ≤ 第一天到當天的最高收盤 ×（1 − x）」或「收盤 ≥ 第一天到當天的最低收盤 ×（1 + x）」的日子，
+       前者確定高點、後者確定低點，價格是那段的最高、最低收盤。
+    2. 之後輪流：確定高點以後，找第一個「收盤 ≥ 高點那天之後到當天的最低收盤 ×（1 + x）」的日子，確定低點；低點相反。
+    回傳 [(確定那天, "peak" 或 "trough", 價格, 轉折點那天)]；一樣高時轉折點那天取最後一天。
+    """
+    def at_most(a, b):
+        return a <= b or math.isclose(a, b)
+
+    def at_least(a, b):
+        return a >= b or math.isclose(a, b)
+
+    down, up = 1 - percent / 100, 1 + percent / 100
+    n, events, start = len(close), [], 0
+
+    def is_peak(d):
+        return at_most(close[d], max(close[start: d + 1]) * down)
+
+    def is_trough(d):
+        return at_least(close[d], min(close[start: d + 1]) * up)
+
+    day = _first(range(n), lambda d: is_peak(d) or is_trough(d))
+    kind = "peak" if day is not None and is_peak(day) else "trough"
+    while day is not None:
+        seg = close[start: day + 1]
+        price = max(seg) if kind == "peak" else min(seg)
+        pivot = start + max(i for i, c in enumerate(seg) if c == price)
+        events.append((day, kind, price, pivot))
+        start = pivot + 1
+        kind = "trough" if kind == "peak" else "peak"
+        day = _first(range(day + 1, n), is_trough if kind == "trough" else is_peak)
+    return events
+
+
+@reference("swing")
+def _swing(p, a):
+    close, n = list(a["close"]), len(a["close"])
+    out = []
+    # 參數挑過：每組都有 20 個以上的轉折點，第一個轉折點有高點也有低點；0.5 元的那組資料
+    # 3、5、10 都會遇到剛好回跌或回漲 percent%，其中 10% 有一次不加容許誤差就會漏掉
+    for percent in (3.0, 5.0, 10.0):
+        lines = {"peak": [math.nan] * n, "trough": [math.nan] * n}
+        for day, kind, price, _ in _swing_events(close, percent):
+            lines[kind][day:] = [price] * (n - day)
+        out.append(({"percent": percent}, {k: (v, 0) for k, v in lines.items()}))
+    return out

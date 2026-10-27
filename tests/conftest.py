@@ -30,7 +30,7 @@ CATALOG_PARAMS = {
     "atr": {"period": 14}, "hv": {"period": 21, "year_days": 252}, "parkinson_vol": {"period": 21, "year_days": 252},
     "garman_klass_vol": {"period": 21, "year_days": 252}, "adx": {"period": 14},
     "ichimoku": {"tenkan": 9, "kijun": 26, "senkou": 52}, "sar": {"step": 0.02, "max_step": 0.2},
-    "supertrend": {"period": 10, "multiplier": 3.0}, "candle": {}, "darvas": {"new_high_days": 60, "confirm_days": 3}, "obv": {},"mfi": {"period": 14}, "cmf": {"period": 20},
+    "supertrend": {"period": 10, "multiplier": 3.0}, "candle": {}, "darvas": {"new_high_days": 60, "confirm_days": 3}, "swing": {"percent": 5.0}, "obv": {},"mfi": {"period": 14}, "cmf": {"period": 20},
     "vwap": {"period": 20}, "volume_ratio": {"period": 20},
 }
 

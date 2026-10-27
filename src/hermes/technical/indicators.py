@@ -5,6 +5,8 @@
 
 from __future__ import annotations
 
+import math
+
 import numpy as np
 import pandas as pd
 from numpy.lib.stride_tricks import sliding_window_view
@@ -373,6 +375,44 @@ def darvas_box(df: pd.DataFrame, new_high_days: int, confirm_days: int) -> pd.Da
             top[i], bottom[i] = box_top, box_bottom
         stop[i] = level
     return pd.DataFrame({"top": top, "bottom": bottom, "stop": stop}, index=df.index)
+
+
+def _at_most(a: float, b: float) -> bool:
+    """a ≤ b；相對誤差 1e-9 以內當成相等，和策略條件比大小一樣（例如 100 × 1.1 算出來是 110.00000000000001）。"""
+    return a <= b or math.isclose(a, b)
+
+
+def _at_least(a: float, b: float) -> bool:
+    return a >= b or math.isclose(a, b)
+
+
+def swing_points(df: pd.DataFrame, percent: float) -> pd.DataFrame:
+    """波段轉折點：百分比反轉（又叫 ZigZag；Osler 1998，Federal Reserve Bank of New York Staff Report 42）。
+
+    只用收盤價。tests 以照定義搜尋的寫法對照。
+    - 高點：收盤價從最高收盤價回跌 percent% 以上（收盤 ≤ 最高收盤 ×（1 − percent / 100））那天，
+      那個最高收盤價才確定是高點。低點相反：從最低收盤價回漲 percent% 以上那天才確定。剛好 percent% 也算。
+    - 高點、低點輪流出現：確定高點以後，從那天起找最低收盤價，等它回漲；確定低點以後相反。
+      資料開頭還不知道在漲還是在跌，最高、最低收盤價同時記，先確定的那一個開始（兩個不會同一天確定）。
+    - peak、trough：當天收盤時最近一個已經確定的高點、低點，從確定那天起才有值，之後不會改。
+    """
+    close = df["close"].to_numpy(dtype=float)
+    n = len(close)
+    peak, trough = np.full(n, np.nan), np.full(n, np.nan)
+    down, up = 1 - percent / 100, 1 + percent / 100
+    trend = 0  # 1：上一個確定的是低點，在等高點；-1：在等低點；0：還沒有轉折點
+    highest = lowest = last_peak = last_trough = np.nan
+    for i, c in enumerate(close):
+        if trend >= 0:
+            highest = c if np.isnan(highest) else max(highest, c)
+        if trend <= 0:
+            lowest = c if np.isnan(lowest) else min(lowest, c)
+        if trend >= 0 and _at_most(c, highest * down):
+            trend, last_peak, lowest = -1, highest, c
+        elif trend <= 0 and _at_least(c, lowest * up):
+            trend, last_trough, highest = 1, lowest, c
+        peak[i], trough[i] = last_peak, last_trough
+    return pd.DataFrame({"peak": peak, "trough": trough}, index=df.index)
 
 
 # ------------------------------------------------------------------ 量能類

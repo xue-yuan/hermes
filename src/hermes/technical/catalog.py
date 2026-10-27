@@ -301,6 +301,23 @@ _SPECS = [
         # 要有 new_high_days 天的最高價，才知道是不是創新高
         warmup=lambda new_high_days, confirm_days: new_high_days - 1,
     ),
+    # 轉折點確定以後一直有值（沿用到下一個），沒有「當時沒有型態」的空值；
+    # 第一個轉折點確定以前沒有值，是還算不出來，所以不給暖機天數
+    IndicatorSpec(
+        "swing",
+        "波段轉折點",
+        {
+            "percent": Param(
+                "反轉幅度（%）：從最高收盤價回跌、從最低收盤價回漲幾 %，才確定是高點、低點",
+                float,
+                "回跌、回漲 {}% 才確定",
+            ),
+        },
+        lambda p, percent: ind.swing_points(p, percent),
+        outputs=("peak", "trough"),
+        line_labels=("最近確定的高點", "最近確定的低點"),
+        overlay=True,
+    ),
     # 量能類
     IndicatorSpec("obv", "能量潮 OBV", {}, lambda p: ind.obv(p)),
     IndicatorSpec(
