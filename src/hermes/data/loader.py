@@ -15,6 +15,9 @@ from hermes.data.store import Cache
 # 漲跌幅限制，以及判斷「跳空超過限制」時容許的誤差（漲跌停價會向下取到升降單位）
 PRICE_LIMIT = 0.10
 LIMIT_TOLERANCE = 0.005
+# 新上市股票的前幾個交易日沒有漲跌幅限制；資料第一天比 HISTORY_START 晚這麼多天以上，才當成之後才上市
+NO_LIMIT_DAYS = 5
+LISTED_LATER = pd.Timedelta(days=30)
 
 # 官方的公司行動紀錄：(資料集, 名稱, 前一日收盤欄位, 參考價欄位, 漲停價欄位, 跌停價欄位, 權／息欄位)
 # 權／息欄位：除權息紀錄標示「權」「息」「權息」，有「權」代表股數可能改變（配股或現金增資，要看證交所的明細）；
@@ -68,6 +71,14 @@ def _float_column(df: pd.DataFrame, name: str) -> pd.Series | float:
     return df[name].astype(float) if name in df else np.nan
 
 
+def no_limit_days(days: pd.DatetimeIndex) -> pd.DatetimeIndex:
+    """新上市股票前 NO_LIMIT_DAYS 個交易日沒有漲跌幅限制。資料第一天比 HISTORY_START 晚 LISTED_LATER 以上，
+    代表是之後才上市；從 HISTORY_START 就有資料的股票沒有這段。"""
+    if len(days) and days[0] > pd.Timestamp(HISTORY_START) + LISTED_LATER:
+        return days[:NO_LIMIT_DAYS]
+    return days[:0]
+
+
 class DataLoader:
     def __init__(self, cache: Cache | None = None):
         self.cache = cache or Cache(home_dir())
@@ -95,7 +106,8 @@ class DataLoader:
         df = self._raw_prices(stock_id)
         df["raw_close"] = df["close"]
         factor = pd.Series(1.0, index=df.index)
-        if adjust and stock_id.isdigit():
+        # 代號可能有英文字母（例如 00632R），一樣要還原；大盤指數沒有公司行動紀錄，不會被調整
+        if adjust:
             for _, ev in self.adjustments(stock_id).iterrows():
                 factor[df.index < ev["date"]] *= ev["ratio"]
             for col in ("open", "high", "low", "close"):
@@ -119,6 +131,8 @@ class DataLoader:
         df = df[
             (df["close"] > 0) & (df["high"] > 0) & (df["low"] > 0) & (df["open"] > 0)
         ]
+        if df.empty:
+            raise MissingDataError(f"本機 {stock_id} 的股價資料都是沒有成交的日子")
         return df[["open", "high", "low", "close", "volume", "value", "trades"]].astype(
             float
         )
@@ -230,8 +244,7 @@ class DataLoader:
         prev_close = df["close"].shift(1)
         gap = df["close"] / prev_close - 1.0
         suspicious = (gap.abs() > PRICE_LIMIT + LIMIT_TOLERANCE) & prev_close.notna()
-        if df.index[0] > pd.Timestamp(HISTORY_START) + pd.Timedelta(days=30):
-            suspicious.iloc[:5] = False  # 資料開頭不是 HISTORY_START，代表是之後才上市
+        suspicious &= ~df.index.isin(no_limit_days(df.index))
         suspicious &= ~df.index.isin(self.corporate_actions(stock_id)["date"])
         hits = df.index[suspicious.to_numpy()]
         return pd.DataFrame(
@@ -242,6 +255,10 @@ class DataLoader:
                 "gap": gap[hits].to_numpy(),
             }
         )
+
+    def no_limit_days(self, stock_id: str) -> pd.DatetimeIndex:
+        """新上市、還沒有漲跌幅限制的交易日（見 no_limit_days）。"""
+        return no_limit_days(self._raw_prices(stock_id).index)
 
     def benchmark(self) -> pd.DataFrame:
         """加權指數（TAIEX）日 K。"""

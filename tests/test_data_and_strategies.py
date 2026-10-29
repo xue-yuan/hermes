@@ -47,6 +47,28 @@ def test_adjustment_uses_only_official_records(tmp_path):
     assert list(loader.adjustments("9999")["source"]) == ["除權息"]
 
 
+def test_only_no_trade_days_is_missing_data(tmp_path):
+    """FinMind 把沒有成交的日子記成全 0；全部都是這種日子時，等於沒有股價資料，要明確報錯。"""
+    days = pd.bdate_range("2021-03-01", periods=3).strftime("%Y-%m-%d")
+    loader = _offline_loader(tmp_path, [_price_row(d, 0, 0) for d in days], [])
+    with pytest.raises(MissingDataError, match="都是沒有成交的日子"):
+        loader.prices("9999")
+
+
+def test_codes_with_letters_are_adjusted_too(tmp_path):
+    """代號有英文字母的上市股票（例如 00632R）一樣照官方紀錄還原。"""
+    cache = Cache(tmp_path)
+    days = pd.bdate_range("2021-03-01", periods=4).strftime("%Y-%m-%d")
+    cache.write("TaiwanStockPrice", "00632R", pd.DataFrame(
+        [_price_row(d, 10, c) | {"stock_id": "00632R"} for d, c in zip(days, [10, 10, 9.5, 9.6])]))
+    cache.write("TaiwanStockDividendResult", "00632R", pd.DataFrame([
+        {"date": days[2], "stock_id": "00632R", "before_price": 10.0, "after_price": 9.5,
+         "stock_or_cache_dividend": "息"}]))
+    p = DataLoader(cache=cache).prices("00632R")
+    assert p["adj_factor"].iloc[0] == pytest.approx(0.95)
+    assert p["close"].pct_change().iloc[2] == pytest.approx(0.0)  # 除息的跳空已經還原
+
+
 def test_cache_keeps_data_from_history_start(tmp_path):
     cache = Cache(tmp_path)
     cache.write("TaiwanStockPrice", "9999", pd.DataFrame([_price_row("2019-12-31", 10, 10),

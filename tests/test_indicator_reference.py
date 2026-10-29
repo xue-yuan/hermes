@@ -198,6 +198,15 @@ def test_mfi_is_100_after_straight_rally():
     assert mfi.iloc[415] == 100.0
 
 
+def test_rsi_flat_prices_have_no_value():
+    """前 20 天價格完全沒變動：漲跌都是 0，RS 是 0 ÷ 0，沒有值（不是 100）；之後一路上漲才是 100。"""
+    close = [100.0] * 20 + [100.0 + k for k in range(1, 16)]
+    p = pd.DataFrame({"close": close}, index=pd.bdate_range("2024-01-01", periods=len(close)))
+    rsi = CATALOG["rsi"].compute(p, period=14)
+    assert rsi.iloc[:20].isna().all()
+    assert (rsi.iloc[20:] == 100.0).all()
+
+
 # ------------------------------------------------------- 照定義逐日計算的對照
 def _rows(p):
     return list(p[["open", "high", "low", "close", "volume"]].itertuples(index=False))
@@ -354,8 +363,8 @@ def _supertrend(p, a):
     final_up = final_lo = math.nan
     direction, line, dirs = 1, [], []
     for i, r in enumerate(rows):
-        if math.isnan(atr[i]) or i == 0:
-            line.append(math.nan), dirs.append(1.0)
+        if math.isnan(atr[i]) or i == 0:  # 還沒有 ATR，SuperTrend 和方向都沒有值
+            line.append(math.nan), dirs.append(math.nan)
             continue
         hl2 = (r.high + r.low) / 2
         basic_up, basic_lo = hl2 + 3 * atr[i], hl2 - 3 * atr[i]

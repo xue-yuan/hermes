@@ -217,12 +217,11 @@ def stock(stock_id: StockId, reader: MarketDataReader = Depends(get_reader)) -> 
 
 
 def _period(days: pd.DatetimeIndex, start: date | None, end: date | None) -> tuple[date, date]:
-    """表格、統計和圖一開始顯示的區間：預設最近一年，和 CLI 相同。"""
-    last_day = days[-1]
-    s = start or (last_day - pd.DateOffset(years=1)).date()
-    e = end or last_day.date()
+    """表格、統計和圖一開始顯示的區間：預設到最新一天、結束日往前一年，和 CLI 相同。"""
+    e = end or days[-1].date()
+    s = start or (pd.Timestamp(e) - pd.DateOffset(years=1)).date()
     if s > e:
-        raise HTTPException(422, "起始日不能晚於結束日")
+        raise HTTPException(422, f"起始日不能晚於結束日（{e}）" if end is None else "起始日不能晚於結束日")
     if not ((days >= pd.Timestamp(s)) & (days <= pd.Timestamp(e))).any():
         raise HTTPException(422, f"{s} ～ {e} 之間沒有交易資料")
     return s, e

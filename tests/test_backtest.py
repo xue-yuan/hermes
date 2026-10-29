@@ -42,6 +42,24 @@ def test_close_execution(prices):
     assert res.equity.iloc[-1] == pytest.approx(prices["close"].iloc[-1] / prices["close"].iloc[0], rel=1e-10)
 
 
+def test_benchmark_buys_like_the_strategy(prices):
+    """買進持有基準：開盤成交時在起始日開盤買進，收盤成交時在起始日收盤買進。"""
+    costs = CostModel()
+    flat = pd.Series(0.0, index=prices.index)
+    start = prices.index[50]
+    bench = run_backtest(prices, flat, costs, "open", start=start).benchmark_returns
+    assert bench.iloc[0] == pytest.approx(prices["close"].iloc[50] / prices["open"].iloc[50] - 1 - costs.buy_rate)
+    bench = run_backtest(prices, flat, costs, "close", start=start).benchmark_returns
+    assert bench.iloc[0] == pytest.approx(-costs.buy_rate)
+    assert bench.iloc[1] == pytest.approx(prices["close"].iloc[51] / prices["close"].iloc[50] - 1)
+    # 和 buy_hold 策略（每天收盤後的訊號都是持有）用同樣成交方式的回測相同
+    hold = pd.Series(1.0, index=prices.index)
+    for execution in ("open", "close"):
+        for s in (None, start):
+            res = run_backtest(prices, hold, costs, execution, start=s)
+            pd.testing.assert_series_equal(res.benchmark_returns, res.returns)
+
+
 def test_trade_extraction(prices):
     target = pd.Series(0.0, index=prices.index)
     target.iloc[10:20] = 1.0

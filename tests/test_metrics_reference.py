@@ -133,6 +133,13 @@ def test_displayed_metrics_all_have_reference():
     assert shown <= set(ref), f"沒有對照的績效數字：{shown - set(ref)}"
 
 
+def test_cli_shows_infinite_profit_factor():
+    """沒有賠錢的交易時獲利因子是無限大：CLI 顯示 ∞（和網頁相同），不是代表沒有值的「—」。"""
+    from hermes.cli.console import num
+
+    assert num(float("inf")) == "∞" and num(float("-inf")) == "−∞" and num(float("nan")) == "—"
+
+
 @pytest.mark.parametrize("dist", ["normal", "skewed"])
 def test_psr_is_calibrated(dist):
     """真實 Sharpe 剛好等於門檻時，PSR 應該像均勻分布：超過 95% 的比例約 5%。

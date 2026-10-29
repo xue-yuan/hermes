@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from "react"
 
-// 還原模式：指標、買賣判斷、圖改用還原價格算，同時用實際成交價比對。
+// 還原模式：指標、買賣判斷、圖改用還原價格算；每個模式只算、只顯示自己那種價格。
 // 存在這個瀏覽器，換頁、重新整理、開新分頁都保留；瀏覽器不讓存時只影響這次打開的頁面。
 const KEY = "hermes-adjusted"
 const listeners = new Set<() => void>()

@@ -48,7 +48,8 @@ def test_builtin_backtest_matches_engine(case):
     prices = loader.prices("1234")
     direct = run_backtest(prices, pd.Series(1.0, index=prices.index), COSTS, "open", "買進持有", {}, prices.index[0])
     pd.testing.assert_series_equal(bt.result.returns, direct.returns)
-    assert bt.label == "買進持有" and bt.result.metrics == direct.metrics
+    assert bt.label == "買進持有"
+    np.testing.assert_equal(bt.result.metrics, direct.metrics)  # 和基準完全相同，資訊比率算不出來（空值）
 
 
 @pytest.mark.parametrize("sort", SORT_KEYS)
@@ -81,6 +82,23 @@ def test_compare_includes_buy_and_hold(case):
     start = cmp.results[0].returns.index[0]
     direct = run_backtest(prices, pd.Series(1.0, index=prices.index), COSTS, "open", "買進持有", {}, start)
     pd.testing.assert_series_equal(cmp.benchmark.returns, direct.returns)
+
+
+@pytest.mark.parametrize("execution", ["open", "close"])
+def test_buy_and_hold_is_the_same_everywhere(case, execution):
+    """回測附的買進持有、策略比較的買進持有、buy_hold 策略的回測：成交方式相同，數字完全相同。
+
+    這組策略沒有指標，從資料第一天開始；開盤成交時第一天還沒有前一天的訊號，第二天開盤才買進。
+    """
+    strategies, loader = case
+    rb = rule_backtest(signal_history("1234", "mid", loader=loader, directory=strategies), costs=COSTS,
+                       execution=execution, loader=loader)
+    cmp = compare_strategies("1234", ["mid"], costs=COSTS, execution=execution, loader=loader, directory=strategies)
+    bt = builtin_backtest("1234", "buy_hold", start=rb.start, costs=COSTS, execution=execution, loader=loader)
+    pd.testing.assert_series_equal(rb.result.benchmark_returns, cmp.benchmark.returns, check_names=False)
+    pd.testing.assert_series_equal(bt.result.returns, cmp.benchmark.returns, check_names=False)
+    shown = rb.result.benchmark_metrics  # 回測頁的買進持有：持倉比例、年換手也要和策略比較的相同
+    np.testing.assert_equal(shown, {k: cmp.benchmark.metrics[k] for k in shown})
 
 
 def test_compare_rejects_bad_input(case):

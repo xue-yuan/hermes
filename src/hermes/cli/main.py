@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from contextlib import contextmanager
-from datetime import datetime
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -174,6 +174,29 @@ def _fail(msg: str):
     raise typer.Exit(1)
 
 
+def _date(text: str | None, option: str) -> date | None:
+    """YYYY-MM-DD 轉成日期；格式不對時顯示錯誤。"""
+    if text is None:
+        return None
+    try:
+        return date.fromisoformat(text)
+    except ValueError:
+        _fail(f"{option} 要是 YYYY-MM-DD 格式的日期，例如 2024-01-02（收到 {text}）")
+
+
+def _dates(start: str | None, end: str | None) -> tuple[date | None, date | None]:
+    """--start、--end 轉成日期；起始日不能晚於結束日。"""
+    s, e = _date(start, "--start"), _date(end, "--end")
+    if s and e and s > e:
+        _fail("--start 不能晚於 --end")
+    return s, e
+
+
+def _at_least_one(value: int, option: str) -> None:
+    if value < 1:
+        _fail(f"{option} 要是正整數")
+
+
 # ---------------------------------------------------------------------------
 # 資料：下載、每日更新、自選股、查看。只有 fetch、update、watchlist add 會連網。
 
@@ -230,21 +253,17 @@ def fetch(
         list[str], typer.Argument(help="股票代號，可一次多個，例如 2330 2317")
     ],
     start: Annotated[
-        datetime | None,
+        str | None,
         typer.Option(
-            formats=["%Y-%m-%d"],
-            help="重新下載的起始日；不指定時從本機最後一筆接續，沒有資料就下載完整歷史",
+            help="重新下載的起始日 YYYY-MM-DD；不指定時從本機最後一筆接續，沒有資料就下載完整歷史",
         ),
     ] = None,
     end: Annotated[
-        datetime | None,
-        typer.Option(formats=["%Y-%m-%d"], help="重新下載的結束日，預設到今天"),
+        str | None, typer.Option(help="重新下載的結束日，預設到今天")
     ] = None,
 ):
     """下載個股的所有資料（股價、籌碼、本益比、除權息…），並一併更新大盤指數。只接受上市股票。"""
-    if start and end and start > end:
-        _fail("--start 不能晚於 --end")
-    s, e = (start.date() if start else None), (end.date() if end else None)
+    s, e = _dates(start, end)
     svc = MarketDataService()
     report = _fetch_with_progress(
         stocks, lambda cb: svc.fetch(stocks, s, e, on_progress=cb)
@@ -289,6 +308,7 @@ def verify(
     from hermes.data.twse import TwseClient
     from hermes.services.verify import verify_stock
 
+    _at_least_one(months, "--months")
     ids = stocks or [item.stock_id for item in MarketDataService().list_watchlist()]
     if not ids:
         _fail("請指定股票代號，或先用 hermes watchlist add 加入自選股")
@@ -336,6 +356,7 @@ def show(
     ] = False,
 ):
     """查看本機的日 K 資料。"""
+    _at_least_one(last, "--last")
     svc = MarketDataService()
     try:
         prices = svc.price_history(stock, adjust=adjust)
@@ -539,7 +560,9 @@ def tech(
     """技術指標數值：預設是常用版（indicators/common.yaml），用實際成交價算。"""
     loader = _loader()
     try:
-        snap = indicator_snapshot(stock, indicator_set, day, loader, adjusted=adjust)
+        snap = indicator_snapshot(
+            stock, indicator_set, _date(day, "--date"), loader, adjusted=adjust
+        )
     except (
         IndicatorSetNotFoundError,
         StrategyConfigError,
@@ -755,15 +778,13 @@ def signals(
         ),
     ],
     start: Annotated[
-        datetime | None,
+        str | None,
         typer.Option(
-            formats=["%Y-%m-%d"],
-            help="顯示的起始日，預設為一年前（計算一律使用全部資料）",
+            help="顯示的起始日 YYYY-MM-DD，預設為結束日的一年前（計算一律使用全部資料）",
         ),
     ] = None,
     end: Annotated[
-        datetime | None,
-        typer.Option(formats=["%Y-%m-%d"], help="顯示的結束日，預設為最新一天"),
+        str | None, typer.Option(help="顯示的結束日，預設為最新一天")
     ] = None,
     every_day: Annotated[
         bool,
@@ -782,10 +803,11 @@ def signals(
     except (DataError, StrategyConfigError, StrategyNotFoundError) as exc:
         _fail(str(exc))
     last_day = hist.result.values.index[-1]
-    s = start.date() if start else (last_day - pd.DateOffset(years=1)).date()
-    e = end.date() if end else last_day.date()
+    s, e = _dates(start, end)
+    e = e or last_day.date()
+    s = s or (pd.Timestamp(e) - pd.DateOffset(years=1)).date()
     if s > e:
-        _fail("--start 不能晚於 --end")
+        _fail(f"--start 不能晚於結束日 {e}")
     period = hist.table(s, e, every_day=True)
     if period.empty:
         _fail(f"{s} ～ {e} 之間沒有交易資料")
@@ -899,8 +921,8 @@ def _trade_rows(rb: RuleBacktest, trades: pd.DataFrame) -> Table:
 def _backtest_rules(
     stock: str,
     ref: str,
-    start: str | None,
-    end: str | None,
+    start: date | None,
+    end: date | None,
     execution: str,
     costs: CostModel,
     n_trades: int,
@@ -1012,6 +1034,8 @@ def backtest(
     """回測單一策略。"""
     if execution not in ("open", "close"):
         _fail("--exec 只能是 open 或 close")
+    start, end = _dates(start, end)
+    _at_least_one(trades, "--trades")
     if _is_rule_strategy(strategy):
         if param:
             _fail("設定檔策略的參數寫在設定檔裡，不能用 -p")
@@ -1105,7 +1129,7 @@ def compare(
     start: Annotated[
         str | None, typer.Option(help="起始日（預設為所有策略都有訊號的第一天）")
     ] = None,
-    end: str | None = None,
+    end: Annotated[str | None, typer.Option(help="結束日")] = None,
     execution: Annotated[
         str,
         typer.Option("--exec", help="成交方式：open=次日開盤（預設）、close=當日收盤"),
@@ -1140,6 +1164,8 @@ def compare(
         _fail("請用 -s 指定要比較的策略，例如 -s connors_rsi2")
     if execution not in ("open", "close"):
         _fail("--exec 只能是 open 或 close")
+    start, end = _dates(start, end)
+    _at_least_one(top, "--top")
     _etf_tax_note(stock, tax)
     loader = _loader()
     try:
@@ -1259,6 +1285,7 @@ def ml_command(
         walk_forward,
     )
 
+    start = _date(start, "--start")
     loader = _loader()
     try:
         prices = loader.prices(stock)

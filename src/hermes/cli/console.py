@@ -19,8 +19,10 @@ def pct(x, digits: int = 2, sign: bool = False) -> str:
 
 
 def num(x, digits: int = 2) -> str:
-    if x is None or (isinstance(x, float) and (math.isnan(x) or math.isinf(x))):
+    if x is None or (isinstance(x, float) and math.isnan(x)):
         return "—"
+    if isinstance(x, float) and math.isinf(x):  # 例如沒有賠錢的交易時的獲利因子
+        return "∞" if x > 0 else "−∞"
     return f"{x:,.{digits}f}"
 
 

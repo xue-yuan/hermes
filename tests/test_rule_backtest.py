@@ -291,6 +291,42 @@ def test_backtest_command_with_rule_strategy(dividend_case, monkeypatch):
     assert result.exit_code == 1 and "--adjust 只用在策略設定檔" in result.output
 
 
+def test_cli_rejects_bad_dates_and_counts_in_chinese(dividend_case, monkeypatch):
+    """日期格式不對、起始日晚於結束日、筆數小於 1：顯示中文錯誤，不是程式例外或英文訊息。"""
+    home, strategies, _ = dividend_case
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setenv("HERMES_STRATEGIES", str(strategies))
+    cases = [
+        (["backtest", "1234", "-s", "breakout", "--start", "2026-13-01"], "--start 要是 YYYY-MM-DD 格式的日期"),
+        (["backtest", "1234", "-s", "breakout", "--start", "2026-03-09", "--end", "2026-03-02"],
+         "--start 不能晚於 --end"),
+        (["backtest", "1234", "-s", "breakout", "--trades", "0"], "--trades 要是正整數"),
+        (["compare", "1234", "-s", "breakout", "--end", "abc"], "--end 要是 YYYY-MM-DD 格式的日期"),
+        (["compare", "1234", "-s", "breakout", "--top", "0"], "--top 要是正整數"),
+        (["signals", "1234", "-s", "breakout", "--start", "3/2"], "--start 要是 YYYY-MM-DD 格式的日期"),
+        (["signals", "1234", "-s", "breakout", "--start", "2026-04-01"], "--start 不能晚於結束日 2026-03-13"),
+        (["tech", "1234", "--date", "abc"], "--date 要是 YYYY-MM-DD 格式的日期"),
+        (["show", "1234", "--last", "0"], "--last 要是正整數"),
+        (["fetch", "1234", "--start", "abc"], "--start 要是 YYYY-MM-DD 格式的日期"),
+        (["verify", "1234", "--months", "0"], "--months 要是正整數"),
+    ]
+    for args, message in cases:
+        result = CliRunner().invoke(app, [*args, "--no-plot"] if args[0] in ("backtest", "compare", "signals")
+                                    else args, env={"COLUMNS": "200"})
+        assert result.exit_code == 1 and message in result.output, (args, result.output)
+
+
+def test_signals_default_start_is_a_year_before_end(dividend_case, monkeypatch):
+    """只給結束日時，顯示結束日往前一年，不會因為預設的起始日（最新一天往前一年）晚於結束日而報錯。"""
+    home, strategies, _ = dividend_case
+    monkeypatch.setenv("HERMES_HOME", str(home))
+    monkeypatch.setenv("HERMES_STRATEGIES", str(strategies))
+    result = CliRunner().invoke(app, ["signals", "1234", "-s", "breakout", "--end", "2026-03-06", "--no-plot"],
+                                env={"COLUMNS": "200"})
+    assert result.exit_code == 0, result.output
+    assert "2025-03-06 ～ 2026-03-06" in result.output
+
+
 def test_rule_strategy_name_must_not_shadow_python_strategy(dividend_case, monkeypatch):
     home, strategies, _ = dividend_case
     (strategies / "hmm.yaml").write_text(STRATEGY, encoding="utf-8")

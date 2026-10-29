@@ -57,7 +57,9 @@ def rsi(close: pd.Series, n: int) -> pd.Series:
     loss = wilder((-delta).clip(lower=0.0), n)
     rs = gain / loss.replace(0.0, np.nan)
     out = 100.0 - 100.0 / (1.0 + rs)
-    return out.where(loss != 0.0, 100.0).where(gain.notna())
+    # 只有上漲時是 100；價格完全沒變動（漲跌都是 0）時 RS 是 0 ÷ 0，沒有值
+    flat = (gain == 0.0) & (loss == 0.0)
+    return out.where(loss != 0.0, 100.0).where(gain.notna() & ~flat)
 
 
 def macd(close: pd.Series, fast: int, slow: int, signal: int) -> pd.DataFrame:
@@ -303,6 +305,8 @@ def supertrend(df: pd.DataFrame, n: int, mult: float) -> pd.DataFrame:
         else:
             direction[i] = direction[i - 1]
         line[i] = lower[i] if direction[i] > 0 else upper[i]
+    # 方向從多頭開始算，但 ATR 算出來以前還沒有 SuperTrend，方向也沒有值
+    direction[np.isnan(line)] = np.nan
     return pd.DataFrame({"supertrend": line, "direction": direction}, index=df.index)
 
 

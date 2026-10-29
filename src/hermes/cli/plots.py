@@ -94,8 +94,10 @@ def plot_signals(
     並畫出策略用到的門檻（實線）和設定檔寫的參考線（虛線）。
     """
     layout = chart_layout(strategy)
-    overlays, panels, used = layout.overlays, layout.panels, layout.thresholds
+    overlays, panels, used = layout.overlays, dict(layout.panels), layout.thresholds
     refs = layout.reference_lines
+    if "volume" in used:  # 條件裡有成交量的門檻：成交量另外一個子圖，才畫得出門檻
+        panels["volume"] = ["volume"]
 
     fig, axes = plt.subplots(
         1 + len(panels),

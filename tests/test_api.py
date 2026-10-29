@@ -537,6 +537,9 @@ def test_signals_range(client):
     body = client.get("/api/stocks/1234/signals?strategy=cross&start=2024-03-01&end=2024-06-28").json()
     assert body["range"] == {"start": "2024-03-01", "end": "2024-06-28"}
     assert client.get("/api/stocks/1234/signals?strategy=cross&start=2025-01-01&end=2024-01-01").status_code == 422
+    # 只給結束日：結束日往前一年（資料從 2024-01-02 開始），不是用最新一天往前一年當起始日而報錯
+    body = client.get("/api/stocks/1234/signals?strategy=cross&end=2024-02-29").json()
+    assert body["range"] == {"start": "2024-01-02", "end": "2024-02-29"}
 
 
 def test_prices_match_loader_and_signals(client, loader):
@@ -548,7 +551,7 @@ def test_prices_match_loader_and_signals(client, loader):
         _same(body["series"][col], raw[col].tolist())
     _same(body["series"]["volume_lots"], (raw["volume"] / 1000).tolist())
 
-    for q in ("", "&start=2024-03-01&end=2024-06-28", "&start=2024-03-02"):
+    for q in ("", "&start=2024-03-01&end=2024-06-28", "&start=2024-03-02", "&end=2024-02-29"):
         sig = client.get(f"/api/stocks/1234/signals?strategy=cross{q}").json()
         px = client.get(f"/api/stocks/1234/prices?{q[1:]}").json()
         assert px["range"] == sig["range"], q

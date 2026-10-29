@@ -27,6 +27,8 @@ class BacktestResult:
     benchmark_returns: pd.Series
     metrics: dict
     params: dict = field(default_factory=dict)
+    # 買進持有每天的部位：從第一個能成交的時間點起都是 1（開盤成交、從資料第一天開始時，第一天還沒有訊號）
+    benchmark_position: pd.Series | None = None
 
     @property
     def equity(self) -> pd.Series:
@@ -38,9 +40,11 @@ class BacktestResult:
 
     @property
     def benchmark_metrics(self) -> dict:
-        """買進持有（benchmark_returns）的績效；一直持有，所以部位都是 1。"""
-        index = self.benchmark_returns.index
-        return m.summarize(self.benchmark_returns, pd.Series(1.0, index=index))
+        """買進持有（benchmark_returns）的績效。"""
+        position = self.benchmark_position
+        if position is None:
+            position = pd.Series(1.0, index=self.benchmark_returns.index)
+        return m.summarize(self.benchmark_returns, position)
 
 
 def run_backtest(
@@ -57,14 +61,9 @@ def run_backtest(
     """target：每日收盤後決定的目標權重（1=滿倉做多，0=空手，負值=放空）。"""
     costs = costs or CostModel()
     df = prices[["open", "close"]].copy()
-    target = target.reindex(df.index).astype(float)
-
-    if execution == "open":
-        w = target.shift(1).fillna(0.0)  # t 日開盤時持有的部位
-    elif execution == "close":
-        w = target.fillna(0.0)  # t 日收盤成交（假設能以訊號當根收盤價成交）
-    else:
+    if execution not in ("open", "close"):
         raise ValueError("execution 必須是 'open' 或 'close'")
+    w = _holdings(target.reindex(df.index).astype(float), execution)
 
     if start is not None or end is not None:
         mask = pd.Series(True, index=df.index)
@@ -74,27 +73,10 @@ def run_backtest(
             mask &= df.index <= pd.Timestamp(end)
         df, w = df[mask], w[mask]
 
-    # 期初從空手開始：第一天的 w_prev 為 0，因此首日以開盤價建倉並支付買進成本
-    prev_close = df["close"].shift(1)
-    w_prev = w.shift(1).fillna(0.0)
-    delta = w - w_prev
-    cost = (
-        delta.clip(lower=0.0) * costs.buy_rate
-        + (-delta).clip(lower=0.0) * costs.sell_rate
-    )
-
-    if execution == "open":
-        gap = (df["open"] / prev_close - 1.0).fillna(0.0)
-        intraday = df["close"] / df["open"] - 1.0
-        ret = (1.0 + w_prev * gap) * (1.0 + w * intraday - cost) - 1.0
-    else:
-        daily = (df["close"] / prev_close - 1.0).fillna(0.0)
-        ret = w_prev * daily - cost
-
-    bench = (df["close"] / prev_close - 1.0).fillna(0.0)
-    if len(bench):
-        # 買進持有基準：第一天以開盤價買入
-        bench.iloc[0] = df["close"].iloc[0] / df["open"].iloc[0] - 1.0 - costs.buy_rate
+    ret, cost = _simulate(df, w, costs, execution)
+    # 買進持有基準：每天的訊號都是持有，用和策略相同的成交方式，所以和 buy_hold 策略的回測相同
+    always = _holdings(pd.Series(1.0, index=prices.index), execution).reindex(df.index)
+    bench, _ = _simulate(df, always, costs, execution)
 
     trades = extract_trades(ret, w)
     result_metrics = m.summarize(ret, w, trades, bench, rf=rf)
@@ -107,7 +89,34 @@ def run_backtest(
         benchmark_returns=bench,
         metrics=result_metrics,
         params=params or {},
+        benchmark_position=always,
     )
+
+
+def _holdings(target: pd.Series, execution: str) -> pd.Series:
+    """每天持有的部位：開盤成交是前一天收盤後的訊號，收盤成交是當天的訊號（假設能以訊號當根收盤價成交）。"""
+    return (target.shift(1) if execution == "open" else target).fillna(0.0)
+
+
+def _simulate(
+    df: pd.DataFrame, w: pd.Series, costs: CostModel, execution: str
+) -> tuple[pd.Series, pd.Series]:
+    """每天的報酬和成本。期初從空手開始：第一天的 w_prev 為 0，第一天有部位就要建倉並支付買進成本。"""
+    prev_close = df["close"].shift(1)
+    w_prev = w.shift(1).fillna(0.0)
+    delta = w - w_prev
+    cost = (
+        delta.clip(lower=0.0) * costs.buy_rate
+        + (-delta).clip(lower=0.0) * costs.sell_rate
+    )
+    if execution == "open":
+        gap = (df["open"] / prev_close - 1.0).fillna(0.0)
+        intraday = df["close"] / df["open"] - 1.0
+        ret = (1.0 + w_prev * gap) * (1.0 + w * intraday - cost) - 1.0
+    else:
+        daily = (df["close"] / prev_close - 1.0).fillna(0.0)
+        ret = w_prev * daily - cost
+    return ret, cost
 
 
 def extract_trades(returns: pd.Series, position: pd.Series) -> pd.DataFrame:

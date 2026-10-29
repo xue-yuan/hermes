@@ -118,18 +118,33 @@ class FakeTwse:
         return self.daily["foreign_holding"][day]
 
 
+def _official_row(d, o, h, lo, c):
+    return {k: v for k, v in _row(d, o, h, lo, c).items() if k not in ("stock_id", "spread")}
+
+
 def test_official_check_finds_differences():
-    days = _days(3, "2026-03-02")
-    finmind = pd.DataFrame([_row(days[0], 10, 10, 10, 10), _row(days[1], 10, 11, 10, 11)])
-    official = pd.DataFrame([{k: v for k, v in _row(days[0], 10, 10, 10, 10).items() if k not in ("stock_id", "spread")},
-                             {k: v for k, v in _row(days[1], 10, 11, 10, 10.5).items()
-                              if k not in ("stock_id", "spread")},
-                             {k: v for k, v in _row(days[2], 10, 10, 10, 10).items() if k not in ("stock_id", "spread")}])
+    days = _days(4, "2026-03-02")
+    finmind = pd.DataFrame([_row(days[0], 10, 10, 10, 10), _row(days[2], 10, 11, 10, 11)])
+    official = pd.DataFrame([_official_row(days[0], 10, 10, 10, 10), _official_row(days[1], 10, 10, 10, 10),
+                             _official_row(days[2], 10, 11, 10, 10.5), _official_row(days[3], 10, 10, 10, 10)])
     check = check_official("9999", finmind, "twse", 1, FakeTwse(official))
     assert check.status == "fail"
-    assert any(days[1] in p and "close" in p for p in check.problems)
-    assert any(days[2] in p and "FinMind 沒有" in p for p in check.problems)
+    assert any(days[2] in p and "close" in p for p in check.problems)
+    assert any(days[1] in p and "FinMind 沒有" in p for p in check.problems)
+    # 本機最後一天以後是還沒下載，不是 FinMind 缺資料
+    assert not any(days[3] in p for p in check.problems) and f"到本機最後一天 {days[2]}" in check.summary
     assert check_official("9999", finmind, "tpex", 1, FakeTwse(official)).status == "skip"
+
+
+def test_checks_stop_at_the_last_local_day(tmp_path):
+    """官方已經有、本機還沒下載的日子不算問題：股價、本益比都只比到本機最後一天。"""
+    days = _days(3, "2026-10-20")
+    loader, twse = _chip_loader(tmp_path, days[:2]), _official_chips(days)
+    twse.df = pd.DataFrame([_official_row(d, 10, 10, 10, 10) for d in days])
+    raw = loader.read("TaiwanStockPrice", "2330")
+    for check in (check_official("2330", raw, "twse", 1, twse), check_valuation("2330", loader, "twse", 1, twse)):
+        assert check.status == "ok", check.problems
+        assert f"到本機最後一天 {days[1]}" in check.summary
 
 
 def test_official_check_accepts_no_trade_day():
@@ -161,7 +176,20 @@ def test_new_listing_first_five_days_have_no_limit(tmp_path):
     d = _days(6)  # 資料從 2026 年才開始，代表是新上市股票
     rows = [_row(d[0], 100, 100, 100, 100), _row(d[1], 130, 130, 130, 130)]
     rows += [_row(day, 130, 130, 130, 130) for day in d[2:]]
-    assert check_adjustment("9999", _loader(tmp_path, rows)).status == "ok"
+    loader = _loader(tmp_path, rows)
+    assert check_adjustment("9999", loader).status == "ok"
+    assert check_tick_grid("9999", loader).status == "ok"  # 前 5 天只檢查升降單位
+
+
+def test_new_listing_still_checks_ticks_and_later_limits(tmp_path):
+    d = _days(7)
+    rows = [_row(d[0], 100, 100, 100, 100), _row(d[1], 130, 130.3, 130, 130)]  # 130.3 不在每檔 0.5 的格點上
+    rows += [_row(day, 130, 130, 130, 130) for day in d[2:6]]
+    rows += [_row(d[6], 130, 145, 130, 145)]  # 第 6 天起有漲跌幅限制：145 超過 130 × 1.1 = 143
+    problems = check_tick_grid("9999", _loader(tmp_path, rows)).problems
+    assert [p[:10] for p in problems] == [d[1], d[6]]
+    assert "新上市" in problems[0] and "high=130.3" in problems[0]
+    assert "不在範圍" in problems[1] and "high=145" in problems[1]
 
 
 # ---------------------------------------------------------------------------

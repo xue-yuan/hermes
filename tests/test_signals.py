@@ -107,6 +107,22 @@ def test_plot_signals_writes_png(tmp_path, prices):
     assert path.exists() and path.stat().st_size > 0
 
 
+def test_plot_signals_draws_volume_threshold(tmp_path, prices, monkeypatch):
+    """條件裡有成交量的門檻時，成交量另外一個子圖，畫出門檻。"""
+    from hermes.cli import plots
+    from hermes.strategies import run_rules
+
+    s = parse_strategy({"name": "量大", "buy": {"left": "volume", "op": "gt", "right": 5e6},
+                        "sell": {"left": "close", "op": "lt", "right": 1}})
+    res = run_rules(s, prices)
+    figs = []
+    monkeypatch.setattr(plots, "_finish", lambda fig, path: figs.append(fig) or path)
+    plots.plot_signals(res.values, res.buy_streak, res.sell_streak, s, "測試", tmp_path / "volume.png")
+    ax = figs[0].axes[1]
+    assert ax.get_ylabel() == "volume"
+    assert [line.get_label() for line in ax.get_lines()] == ["volume", "門檻 5e+06"]
+
+
 def test_overlay_lines():
     assert CATALOG["sma"].on_price_chart()
     assert not CATALOG["cci"].on_price_chart()

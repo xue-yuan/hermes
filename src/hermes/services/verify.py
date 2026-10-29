@@ -18,7 +18,7 @@ from hermes.data.twse import (
     MARGIN_COLUMNS,
     TwseClient,
 )
-from hermes.strategies import candidate_closes
+from hermes.strategies import candidate_closes, tick_size
 
 PRICE_COLUMNS = ["open", "max", "min", "close"]
 COMPARE_COLUMNS = PRICE_COLUMNS + [
@@ -51,13 +51,12 @@ def check_official(
     if market != "twse":
         return Check(name, "skip", f"市場別是 {market or '未知'}，目前只能比對上市股票")
     finmind = raw.assign(date=raw["date"].astype(str).str[:10]).set_index("date")
+    last = finmind.index.max()
     official = pd.concat(
-        [
-            twse.stock_day(stock_id, m)
-            for m in _months_back(date.fromisoformat(finmind.index.max()), months)
-        ]
+        [twse.stock_day(stock_id, m) for m in _months_back(date.fromisoformat(last), months)]
     )
-    official = official.set_index("date")
+    # 只比到本機最後一天：之後的日子是還沒下載，不是 FinMind 缺資料
+    official = official[official["date"] <= last].set_index("date")
     problems = [
         f"{d} 官方有資料，FinMind 沒有"
         for d in official.index.difference(finmind.index)
@@ -80,7 +79,7 @@ def check_official(
     for d, row in diff[(diff > 1e-6).any(axis=1)].iterrows():
         cols = "、".join(c for c in COMPARE_COLUMNS if row[c] > 1e-6)
         problems.append(f"{d} 欄位不同：{cols}")
-    summary = f"最近 {months} 個月共 {len(both)} 個交易日"
+    summary = f"最近 {months} 個月共 {len(both)} 個交易日（到本機最後一天 {last}）"
     skipped = in_range.intersection(no_trade).difference(official.index)
     if len(skipped):
         summary += f"；{'、'.join(skipped)} 兩邊都沒有成交"
@@ -188,10 +187,12 @@ def check_valuation(
     if market != "twse":
         return Check(name, "skip", f"市場別是 {market or '未知'}，目前只能比對上市股票")
     ours = _by_date(loader.read("TaiwanStockPER", stock_id))
-    last = date.fromisoformat(ours.index.max())
+    last = ours.index.max()
     official = pd.concat(
-        [twse.valuation(stock_id, m) for m in _months_back(last, months)]
-    ).set_index("date")
+        [twse.valuation(stock_id, m) for m in _months_back(date.fromisoformat(last), months)]
+    )
+    # 只比到本機最後一天：之後的日子是還沒下載，不是 FinMind 缺資料
+    official = official[official["date"] <= last].set_index("date")
     problems = [
         f"{d} 官方有資料，FinMind 沒有" for d in official.index.difference(ours.index)
     ]
@@ -208,7 +209,7 @@ def check_valuation(
                 problems.append(
                     f"{d} {c}：FinMind {ours.at[d, c]}，官方 {official.at[d, c]}"
                 )
-    summary = f"本益比、股價淨值比、殖利率，最近 {months} 個月共 {len(both)} 個交易日"
+    summary = f"本益比、股價淨值比、殖利率，最近 {months} 個月共 {len(both)} 個交易日（到本機最後一天 {last}）"
     return Check(name, "fail" if problems else "ok", summary, problems)
 
 
@@ -308,10 +309,18 @@ def check_share_changes(stock_id: str, loader: DataLoader) -> Check:
     return Check(name, status, summary, problems + missing)
 
 
+def _on_tick(price: float, etf: bool) -> bool:
+    """價格對齊升降單位（以「分」計算，避免浮點誤差）。"""
+    cents = price * 100
+    whole = round(cents)
+    return abs(cents - whole) < 1e-6 and whole % tick_size(whole, etf) == 0
+
+
 def check_tick_grid(stock_id: str, loader: DataLoader) -> Check:
     """每天（HISTORY_START 起）的開高低收都要在參考價的漲跌停範圍內，且對齊升降單位。
 
     參考價：除權息、減資、分割當天用官方參考價，其他日子用前一個交易日的收盤價（暫停交易的日子不算）。
+    新上市股票前幾個交易日沒有漲跌幅限制，只檢查升降單位。
     官方有公布當天漲跌停價的日子，也比對程式算出來的漲跌停價。
     """
     name = "升降單位與漲跌停"
@@ -322,6 +331,7 @@ def check_tick_grid(stock_id: str, loader: DataLoader) -> Check:
         .set_index("date")
     )
     etf = stock_id.startswith("00")
+    no_limit = loader.no_limit_days(stock_id)
     problems, checked, official = [], 0, 0
     prev_close = p["close"].shift(1)
     for d, row in p.iterrows():
@@ -336,14 +346,23 @@ def check_tick_grid(stock_id: str, loader: DataLoader) -> Check:
             continue
         grid = candidate_closes(ref, etf)
         checked += 1
-        bad = [
-            c
-            for c in ("open", "high", "low", "close")
-            if float(row[c]) not in set(grid)
-        ]
+        if d in no_limit:
+            bad = [
+                c
+                for c in ("open", "high", "low", "close")
+                if not _on_tick(float(row[c]), etf)
+            ]
+            where = "不在升降單位的格點上（新上市沒有漲跌幅限制）"
+        else:
+            bad = [
+                c
+                for c in ("open", "high", "low", "close")
+                if float(row[c]) not in set(grid)
+            ]
+            where = "不在範圍或格點上"
         if bad:
             problems.append(
-                f"{d:%Y-%m-%d} {label} {ref:g}：{'、'.join(f'{c}={row[c]:g}' for c in bad)} 不在範圍或格點上"
+                f"{d:%Y-%m-%d} {label} {ref:g}：{'、'.join(f'{c}={row[c]:g}' for c in bad)} {where}"
             )
         if (
             d in actions.index

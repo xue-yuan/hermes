@@ -30,7 +30,8 @@ const RANK: [string, string, (m: Metrics) => string, string?][] = [
 export function CompareTab({ stock, dark }: { stock: StockInfo; dark: boolean }) {
   const adjusted = useAdjusted()
   const [params, setParams] = useSearchParams()
-  const chosen = params.getAll("s")
+  // 和其他分頁同一個參數名稱，換分頁時帶著勾好的策略
+  const chosen = params.getAll("strategy")
   const sort = params.get("sort") ?? "sharpe"
   const form = {
     start: params.get("start") ?? "",
@@ -50,8 +51,8 @@ export function CompareTab({ stock, dark }: { stock: StockInfo; dark: boolean })
     e.preventDefault()
     setParams(
       (p) => {
-        p.delete("s")
-        draft.s.forEach((s) => p.append("s", s))
+        p.delete("strategy")
+        draft.s.forEach((s) => p.append("strategy", s))
         for (const [k, v] of Object.entries({ ...draft, s: undefined })) {
           if (k === "s") continue
           const val = String(v ?? "").trim()
