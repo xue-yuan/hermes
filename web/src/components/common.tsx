@@ -2,7 +2,7 @@ import type { ReactNode } from "react"
 import { AlertTriangle } from "lucide-react"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Skeleton } from "@/components/ui/skeleton"
-import { ApiError } from "@/lib/api"
+import { ApiError, type StrategyState } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 export const DISCLAIMER = "※ 本工具僅供研究與教育用途，回測績效不代表未來報酬，不構成投資建議。"
@@ -62,6 +62,19 @@ export function Loading() {
       <Skeleton className="h-64 w-full" />
     </div>
   )
+}
+
+/** 策略目前的部位（照策略的規則算的，不是使用者實際有沒有買）；算不出來（沒有賣出條件、指標還沒有值）時是「—」。 */
+export function boughtText(state: StrategyState | null): string {
+  if (state === null) return "—"
+  return state.bought ? "買進後還沒賣出" : "還沒買進"
+}
+
+/** 這天收盤後的訊號要做什麼：照策略買進、照策略賣出、不用動。 */
+export function NextAction({ state }: { state: StrategyState | null }) {
+  if (state === null) return <span className="text-muted-foreground">—</span>
+  if (state.action === null) return <span className="text-muted-foreground">不用動</span>
+  return <Side side={state.action}>{state.action === "buy" ? "照策略買進" : "照策略賣出"}</Side>
 }
 
 export function Side({ side, children }: { side: "buy" | "sell"; children?: ReactNode }) {

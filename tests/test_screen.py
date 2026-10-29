@@ -59,8 +59,20 @@ def test_screen_command(setup, monkeypatch):
     monkeypatch.setenv("HERMES_STRATEGIES", str(strategies))
     result = CliRunner().invoke(app, ["screen", "1111", "2222"], env={"COLUMNS": "160"})
     assert result.exit_code == 0, result.output
-    for text in ("① 新觸發（2026-01-19）", "② 條件仍成立", "2222 的資料只到 2026-01-16"):
+    for text in ("① 新觸發（2026-01-19）", "② 條件仍成立", "2222 的資料只到 2026-01-16", "策略目前", "下一個交易日開盤",
+                 "照策略買進", "不是你實際有沒有買"):
         assert text in result.output
+
+
+def test_screen_state_follows_strategy(setup):
+    """策略目前的部位和下一步：1111 最後一天剛站上 102，還沒買進、下一個交易日開盤買進；
+    2222 已經在 102 之上 3 天，事件策略只有穿越那天買進，之後一直買進後還沒賣出；狀態策略沒有賣出條件，算不出來。"""
+    _, strategies, loader = setup
+    report = screen(["1111", "2222"], loader=loader, directory=strategies)
+    got = {(r.stock_id, r.strategy_id): r.state for r in report.rows}
+    assert (got[("1111", "event")].bought, got[("1111", "event")].action) == (False, "buy")
+    assert (got[("2222", "event")].bought, got[("2222", "event")].action) == (True, None)
+    assert got[("1111", "state")] is None and got[("2222", "state")] is None
 
 
 def test_screen_warns_unexplained_gap(setup, monkeypatch):

@@ -10,11 +10,13 @@ from hermes.chips import chip_summary
 from hermes.data import Cache, DataLoader
 from hermes.services import (
     SORT_KEYS,
+    StrategyState,
     builtin_backtest,
     chip_report,
     compare_strategies,
     is_rule_strategy,
     rule_backtest,
+    screen,
     signal_history,
 )
 from hermes.strategies import StrategyConfigError
@@ -117,10 +119,11 @@ def test_rule_strategy_name_must_not_shadow_builtin(case):
         is_rule_strategy("buy_hold", strategies)
 
 
+# （這天策略是不是買進後還沒賣出, 這天收盤後的訊號）
 @pytest.mark.parametrize(("closes", "expected"), [
-    ([100] * 30 + [101], (True, "buy")),  # 最後一天剛站上 100.5
-    ([100] * 30 + [101, 101], (True, None)),
-    ([100] * 30 + [101, 99], (False, "sell")),
+    ([100] * 30 + [101], (False, "buy")),  # 最後一天剛站上 100.5：還沒買進，下一個交易日開盤買進
+    ([100] * 30 + [101, 101], (True, None)),  # 前一天的買進訊號已經在這天開盤成交，不用動
+    ([100] * 30 + [101, 99], (True, "sell")),  # 買進後還沒賣出，這天跌破 99.5，下一個交易日開盤賣出
     ([100] * 31, (False, None)),
 ])
 def test_latest_action(tmp_path, closes, expected):
@@ -132,7 +135,10 @@ def test_latest_action(tmp_path, closes, expected):
                                        "sell: {left: close, op: lt, right: 99.5}\n", encoding="utf-8")
     loader = DataLoader(Cache(home))
     rb = rule_backtest(signal_history("1234", "s", loader=loader, directory=strategies), days[0], loader=loader)
-    assert rb.latest() == (days[-1], *expected)
+    assert rb.latest() == StrategyState(days[-1], *expected)
+    # 每日選股用同一套算法（從指標都算得出來的第一天開始，這裡就是第一天）
+    report = screen(["1234"], ["s"], loader=loader, directory=strategies)
+    assert report.rows[0].state == rb.latest()
 
 
 class _FakeLoader:

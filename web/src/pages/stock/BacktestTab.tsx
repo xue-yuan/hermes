@@ -5,7 +5,16 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EquityChart } from "@/components/charts/EquityChart"
-import { AdjustedHelp, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
+import {
+  AdjustedHelp,
+  ErrorBox,
+  Field,
+  Loading,
+  NextAction,
+  Warnings,
+  boughtText,
+  priceName,
+} from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type Backtest, type Metrics, type StockInfo, type Trade } from "@/lib/api"
 import { METRIC_HELP, METRIC_ROWS, pct, price, tone } from "@/lib/format"
@@ -91,7 +100,7 @@ export function MetricHelp({ items }: { items: [string, string][] }) {
 }
 
 export const EQUITY_CAPTION =
-  "上：淨值，一開始的資金當成 1，之後變成多少（對數刻度，同樣幾 % 的漲跌看起來一樣長）；中：回撤，離之前最高的淨值跌了幾 %；下：部位，1 是持股、0 是空手。"
+  "上：淨值，一開始的資金當成 1，之後變成多少（對數刻度，同樣幾 % 的漲跌看起來一樣長）；中：回撤，離之前最高的淨值跌了幾 %；下：部位，1 是策略買進後還沒賣出、0 是還沒買進。"
 
 function Trades({ trades }: { trades: Trade[] }) {
   return (
@@ -116,7 +125,7 @@ function Trades({ trades }: { trades: Trade[] }) {
             </TableCell>
             {t.exit === null ? (
               <>
-                <TableCell className="text-muted-foreground">持有中</TableCell>
+                <TableCell className="text-muted-foreground">還沒賣出</TableCell>
                 <TableCell>—</TableCell>
                 <TableCell>—</TableCell>
               </>
@@ -211,23 +220,18 @@ function BacktestView({ b, dark }: { b: Backtest; dark: boolean }) {
           <StrategyRules s={b.strategy} />
           <p>
             期間：{b.start}
-            {beginNote} ～ {b.end}，從空手開始
+            {beginNote} ～ {b.end}，一開始還沒買進
           </p>
           <p>
-            做法：買進條件成立後{when}買進，持有到賣出條件成立後{when}賣出；不加碼、不放空
+            做法：買進條件成立後{when}買進，賣出條件成立後{when}賣出；不加碼、不放空
           </p>
           <p>價格：訊號用{priceName(b.adjusted)}判斷；報酬包含股利</p>
           {b.adjusted ? <AdjustedHelp /> : null}
           <p>成本：{costText(b.costs)}</p>
           {b.latest ? (
             <p className="rounded-md bg-muted/50 p-2">
-              最新（{b.latest.date} 收盤後）：照策略應該{b.latest.holding ? "持有" : "空手"}
-              {b.latest.action ? (
-                <b className={b.latest.action === "buy" ? "text-up" : "text-down"}>
-                  ，{b.execution === "open" ? "下一個交易日開盤" : "當天收盤"}
-                  {b.latest.action === "buy" ? "買進" : "賣出"}
-                </b>
-              ) : null}
+              最新（{b.latest.date} 收盤後）：策略目前{boughtText(b.latest)}；
+              {b.execution === "open" ? "下一個交易日開盤" : "當天收盤"}：<NextAction state={b.latest} />
             </p>
           ) : null}
         </CardContent>

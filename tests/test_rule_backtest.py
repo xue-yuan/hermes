@@ -90,7 +90,7 @@ def test_adjusted_mode_uses_adjusted_signals(dividend_case):
                        costs=CostModel.zero(), loader=loader)
     assert rb.adjusted and rb.result.trades.empty and rb.trades().empty
     assert rb.result.equity.iloc[-1] == 1.0
-    assert rb.latest()[1:] == (False, None)
+    assert (rb.latest().bought, rb.latest().action) == (False, None)
     # 成交價格和漲跌停一律看實際成交價
     assert rb.raw_prices["close"].equals(loader.prices("1234", adjust=False)["close"])
 
@@ -274,7 +274,8 @@ def test_backtest_command_with_rule_strategy(dividend_case, monkeypatch):
     result = CliRunner().invoke(app, ["backtest", "1234", "-s", "breakout", "--no-plot"], env={"COLUMNS": "200"})
     assert result.exit_code == 0, result.output
     for text in ("設定檔策略回測", "2026-03-04", "2026-03-05", "107", "98.5", "持有天數",
-                 "價格：訊號用實際成交價判斷；報酬包含股利", "照策略應該空手"):
+                 "價格：訊號用實際成交價判斷；報酬包含股利", "策略目前還沒買進；下一個交易日開盤：不用動",
+                 "一開始還沒買進"):
         assert text in result.output
     assert "還原" not in result.output
 

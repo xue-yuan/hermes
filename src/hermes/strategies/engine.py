@@ -65,7 +65,7 @@ class RuleResult:
     def position(self, start: pd.Timestamp | None = None) -> pd.Series:
         """回測用的目標部位：從 start 那天空手開始，買進條件成立後持有（1），直到賣出條件成立（0）。
 
-        不加碼、不放空。同一天買進、賣出條件都成立時，持有中就賣出，空手就不買。
+        不加碼、不放空。同一天買進、賣出條件都成立時，已經買進就賣出，還沒買進就不買。
         start 之前為 NaN，代表還沒開始照策略操作。
         """
         out = pd.Series(np.nan, index=self.buy.index)

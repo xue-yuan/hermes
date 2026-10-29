@@ -111,11 +111,19 @@ export interface Overview {
   sort_keys: string[]
 }
 
+/** 照策略的規則算的部位（不是使用者實際有沒有買）：bought 是買進後還沒賣出；action 是這天收盤後的訊號，null 是不用動。 */
+export interface StrategyState {
+  date: string
+  bought: boolean
+  action: "buy" | "sell" | null
+}
+
 export interface ScreenItem {
   stock_id: string
   name: string
   strategy_id: string
   strategy: string
+  state: StrategyState | null
 }
 
 export type ScreenSignal = ScreenItem & { side: "buy" | "sell" }
@@ -266,7 +274,7 @@ export interface Backtest {
   metrics: { id: string; name: string; metrics: Metrics }[]
   curves: Curves
   trades: Trade[]
-  latest: { date: string; holding: boolean; action: "buy" | "sell" | null } | null
+  latest: StrategyState | null
   warnings: string[]
 }
 

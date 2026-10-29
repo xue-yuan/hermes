@@ -108,6 +108,24 @@ def load_fields(
     return merged.reindex(index=index, columns=sorted(names)), warnings
 
 
+@dataclass(frozen=True)
+class StrategyState:
+    """最新一天收盤後，照策略規則算出來的部位。只是策略的訊號，不是使用者實際有沒有買。"""
+
+    date: pd.Timestamp  # 最新一天
+    bought: bool  # 這天策略買進後還沒賣出（之前的訊號已經成交）
+    action: str | None  # 這天收盤後的訊號要做什麼：buy 買進、sell 賣出，None 是不用動
+
+
+def strategy_state(target: pd.Series) -> StrategyState:
+    """target：每天收盤後決定的部位（1 買進、0 沒有），回測起始日以前是 NaN。"""
+    bought = target == 1
+    after = bool(bought.iloc[-1])
+    before = bool(bought.iloc[-2]) if len(bought) > 1 else False
+    action = "buy" if after and not before else "sell" if before and not after else None
+    return StrategyState(target.index[-1], before, action)
+
+
 @dataclass
 class SignalHistory:
     stock_id: str
@@ -136,6 +154,16 @@ class SignalHistory:
             pd.Timestamp(start) if start else None : pd.Timestamp(end) if end else None
         ]
         return out if every_day else out[out["buy"] | out["sell"]]
+
+    def state(self) -> StrategyState | None:
+        """照回測的預設（從指標都算得出來的第一天、還沒買進開始）算的最新狀態；和 rule_backtest 的 latest() 相同。
+
+        沒有賣出條件（不能回測）或指標還沒有值時是 None。
+        """
+        start = self.result.warmup_end
+        if self.strategy.sell is None or start is None:
+            return None
+        return strategy_state(self.result.position(start))
 
     def last_trigger(self, side: str) -> pd.Timestamp | None:
         """最近一次新觸發（連續天數為 1）的日期。"""

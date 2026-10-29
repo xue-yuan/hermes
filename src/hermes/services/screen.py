@@ -14,6 +14,7 @@ from hermes.data import DataError, DataLoader
 from hermes.services.signals import (
     SignalHistory,
     StrategyNotFoundError,
+    StrategyState,
     gap_warnings,
     history,
     load_fields,
@@ -37,6 +38,8 @@ class ScreenRow:
     streak: dict[str, int]  # 買進、賣出條件連續成立的天數
     forming_streak: int = 0  # 形成中的條件連續成立的天數；沒有寫這個條件時是 0
     values: pd.Series | None = None  # 最新一天的價格、指標數值（欄位同 RuleResult.values）
+    # 照回測的預設算的策略狀態（不是使用者實際有沒有買）；沒有賣出條件或指標還沒有值時是 None
+    state: StrategyState | None = None
 
 
 @dataclass
@@ -146,6 +149,7 @@ def screen(
                     streak=_streaks(hist),
                     forming_streak=int(hist.result.forming_streak.iloc[-1]),
                     values=hist.result.values.iloc[-1],
+                    state=hist.state(),
                 )
             )
     return report

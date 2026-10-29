@@ -2,12 +2,13 @@ import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { AdjustedHelp, ErrorBox, Loading, Side, Warnings, priceName } from "@/components/common"
+import { AdjustedHelp, ErrorBox, Loading, NextAction, Side, Warnings, boughtText, priceName } from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type ScreenItem, type ScreenReport } from "@/lib/api"
 import { price } from "@/lib/format"
 
-// 手機上名稱放在代號下面、策略名稱可以換行，最右邊的訊號才不會被擠到畫面外面
+// 手機上名稱放在代號下面、策略名稱可以換行，最右邊的訊號才不會被擠到畫面外面；
+// 畫面不夠寬時，「策略目前」「下一個交易日開盤」放在策略名稱下面
 function StockCell({ r }: { r: ScreenItem }) {
   return (
     <>
@@ -18,7 +19,22 @@ function StockCell({ r }: { r: ScreenItem }) {
         <div className="text-muted-foreground sm:hidden">{r.name}</div>
       </TableCell>
       <TableCell className="hidden align-top sm:table-cell">{r.name}</TableCell>
-      <TableCell className="whitespace-normal align-top">{r.strategy}</TableCell>
+      <TableCell className="whitespace-normal align-top">
+        {r.strategy}
+        <div className="mt-1 space-y-0.5 text-xs lg:hidden">
+          <div>
+            <span className="text-muted-foreground">策略目前：</span>
+            {/* 值整段一起換行，不會拆成「不」「用動」 */}
+            <span className="whitespace-nowrap">{boughtText(r.state)}</span>
+          </div>
+          <div>
+            <span className="text-muted-foreground">下一個交易日開盤：</span>
+            <span className="whitespace-nowrap">
+              <NextAction state={r.state} />
+            </span>
+          </div>
+        </div>
+      </TableCell>
     </>
   )
 }
@@ -32,6 +48,30 @@ function StockHeads() {
     </>
   )
 }
+
+function StateHeads() {
+  return (
+    <>
+      <TableHead className="hidden lg:table-cell">策略目前</TableHead>
+      <TableHead className="hidden lg:table-cell">下一個交易日開盤</TableHead>
+    </>
+  )
+}
+
+function StateCells({ r }: { r: ScreenItem }) {
+  return (
+    <>
+      <TableCell className="hidden align-top lg:table-cell">{boughtText(r.state)}</TableCell>
+      <TableCell className="hidden align-top lg:table-cell">
+        <NextAction state={r.state} />
+      </TableCell>
+    </>
+  )
+}
+
+/** 兩欄的意思：策略的部位不是使用者實際有沒有買。 */
+const STATE_NOTE =
+  "「策略目前」「下一個交易日開盤」是照策略的規則、從指標都算得出來的第一天算的（和回測相同），不是你實際有沒有買。"
 
 /** 每日選股報告：收盤後看，決定下一個交易日開盤要不要買賣。 */
 export function ScreenPage() {
@@ -88,6 +128,7 @@ export function ScreenPage() {
                 <TableRow>
                   <StockHeads />
                   <TableHead>訊號</TableHead>
+                  <StateHeads />
                   <TableHead className="text-right">收盤</TableHead>
                 </TableRow>
               </TableHeader>
@@ -98,6 +139,7 @@ export function ScreenPage() {
                     <TableCell className="align-top">
                       <Side side={t.side} />
                     </TableCell>
+                    <StateCells r={t} />
                     <TableCell className="text-right align-top tabular-nums">{price(t.close)}</TableCell>
                   </TableRow>
                 ))}
@@ -121,6 +163,7 @@ export function ScreenPage() {
                   <StockHeads />
                   <TableHead>訊號</TableHead>
                   <TableHead className="text-right">已持續</TableHead>
+                  <StateHeads />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -131,6 +174,7 @@ export function ScreenPage() {
                       <Side side={t.side} />
                     </TableCell>
                     <TableCell className="text-right align-top tabular-nums">{t.days} 天</TableCell>
+                    <StateCells r={t} />
                   </TableRow>
                 ))}
               </TableBody>
@@ -140,6 +184,7 @@ export function ScreenPage() {
           )}
         </CardContent>
       </Card>
+      {r.triggered.length || r.ongoing.length ? <p className="text-xs text-muted-foreground">{STATE_NOTE}</p> : null}
 
       {r.has_forming ? (
         <Card>

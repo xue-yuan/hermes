@@ -25,6 +25,7 @@ from hermes.services import (
     SORT_KEYS,
     MarketDataReader,
     StrategyNotFoundError,
+    StrategyState,
     chart_layout,
     chip_report,
     column_labels,
@@ -105,6 +106,13 @@ def _strategy_info(ref: str, st: RuleStrategy) -> dict:
     }
 
 
+def _state(state: StrategyState | None) -> dict | None:
+    """照策略的規則算的部位（不是使用者實際有沒有買）：bought 買進後還沒賣出；action 是 buy、sell 或 null（不用動）。"""
+    if state is None:
+        return None
+    return {"date": js.value(state.date), "bought": state.bought, "action": state.action}
+
+
 def _name(reader: MarketDataReader, stock_id: str) -> str:
     return reader.stock_name(stock_id)
 
@@ -166,6 +174,7 @@ def screen_report(
             "name": r.name,
             "strategy_id": r.strategy_id,
             "strategy": r.strategy.name,
+            "state": _state(r.state),
         }
 
     return {
@@ -495,10 +504,7 @@ def backtest(
     rb = rule_backtest(hist, start, end, costs, execution, reader.loader)
     res = rb.result
     trades = rb.trades()
-    latest = None
-    if end is None:
-        last, holding, action = rb.latest()
-        latest = {"date": js.value(last), "holding": holding, "action": action}
+    latest = _state(rb.latest()) if end is None else None
     return {
         "stock_id": stock_id,
         "name": _name(reader, stock_id),

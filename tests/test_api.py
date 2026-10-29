@@ -576,8 +576,8 @@ def test_backtest_matches_services(client, env, loader):
     assert len(body["trades"]) == len(trades)
     assert [t["entry_price"] for t in body["trades"]] == trades["entry_price"].tolist()[::-1]
     _same(body["curves"]["series"][0]["equity"], rb.result.equity.tolist())
-    last, holding, action = rb.latest()
-    assert body["latest"] == {"date": f"{last:%Y-%m-%d}", "holding": holding, "action": action}
+    state = rb.latest()
+    assert body["latest"] == {"date": f"{state.date:%Y-%m-%d}", "bought": state.bought, "action": state.action}
     assert body["start"] == f"{rb.start:%Y-%m-%d}" and body["costs"]["discount"] == 0.5
 
 
@@ -703,6 +703,15 @@ def test_screen_matches_services(client, env, loader):
     assert body["stale"] == [{"stock_id": "5678", "date": "2024-07-29"}]
     only = client.get("/api/screen?strategy=cross").json()
     assert only["strategies"] == 1 and only["errors"] == []
+    # 策略目前的部位和下一步：和回測的 latest() 相同
+    rows = {(r.stock_id, r.strategy_id): r for r in report.rows}
+    assert body["triggered"] + body["ongoing"]
+    for item in body["triggered"] + body["ongoing"]:
+        state = rows[(item["stock_id"], item["strategy_id"])].state
+        expected = rule_backtest(signal_history(item["stock_id"], item["strategy_id"], loader=loader, directory=sdir),
+                                 loader=loader).latest()
+        assert state == expected
+        assert item["state"] == {"date": f"{state.date:%Y-%m-%d}", "bought": state.bought, "action": state.action}
 
 
 def test_screen_forming_matches_services(client, env, loader):

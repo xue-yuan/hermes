@@ -22,8 +22,10 @@ from hermes.data import DataError, DataLoader
 from hermes.services.signals import (
     SignalHistory,
     StrategyNotFoundError,
+    StrategyState,
     resolve_strategy_path,
     signal_history,
+    strategy_state,
 )
 from hermes.strategies import (
     REGISTRY,
@@ -108,13 +110,9 @@ class RuleBacktest:
         grid = candidate_closes(float(ref), etf=self.stock_id.startswith("00"))
         return price >= grid[-1] if up else price <= grid[0]
 
-    def latest(self) -> tuple[pd.Timestamp, bool, str | None]:
-        """最新一天收盤後：照策略應該持有（True）還是空手，以及要買進、賣出，還是不用動（None）。"""
-        holding = self.target == 1
-        now = bool(holding.iloc[-1])
-        prev = bool(holding.iloc[-2]) if len(holding) > 1 else False
-        action = "buy" if now and not prev else "sell" if prev and not now else None
-        return self.target.index[-1], now, action
+    def latest(self) -> StrategyState:
+        """最新一天收盤後：策略是不是買進後還沒賣出，以及這天的訊號要買進、賣出，還是不用動。"""
+        return strategy_state(self.target)
 
 
 def reference_prices(raw: pd.DataFrame, loader: DataLoader, stock_id: str) -> pd.Series:

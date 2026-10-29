@@ -169,6 +169,22 @@ def _etf_tax_note(stock: str, tax: float) -> None:
         )
 
 
+def _bought_text(state) -> str:
+    """策略的部位，不是使用者實際有沒有買；state 是 None 時（沒有賣出條件、指標還沒有值）是「—」。"""
+    if state is None:
+        return "—"
+    return "買進後還沒賣出" if state.bought else "還沒買進"
+
+
+def _action_text(state) -> str:
+    if state is None:
+        return "—"
+    return {
+        "buy": "[bold red]照策略買進[/bold red]",
+        "sell": "[bold green]照策略賣出[/bold green]",
+    }.get(state.action, "[dim]不用動[/dim]")
+
+
 def _fail(msg: str):
     console.print(f"[red]錯誤：{msg}[/red]")
     raise typer.Exit(1)
@@ -432,14 +448,17 @@ def screen_report(
     new = report.triggered_today()
     if new:
         t = Table(title=f"① 新觸發（{report.latest_date:%Y-%m-%d}）")
-        for c in ("代號", "名稱", "策略", "訊號", "收盤"):
-            t.add_column(c, justify="right" if c == "收盤" else "left")
+        for c in ("代號", "名稱", "策略", "訊號", "策略目前", "下一個交易日開盤", "收盤"):
+            # 終端機不夠寬時讓策略名稱換行，其他欄位不截斷
+            t.add_column(c, justify="right" if c == "收盤" else "left", no_wrap=c != "策略", overflow="fold")
         for r, side in new:
             t.add_row(
                 r.stock_id,
                 r.name,
                 r.strategy.name,
                 label[side],
+                _bought_text(r.state),
+                _action_text(r.state),
                 _price(r.close),
             )
         console.print(t)
@@ -449,8 +468,8 @@ def screen_report(
     ongoing = report.ongoing()
     if ongoing:
         t = Table(title="② 條件仍成立")
-        for c in ("代號", "名稱", "策略", "訊號", "已持續"):
-            t.add_column(c, justify="right" if c == "已持續" else "left")
+        for c in ("代號", "名稱", "策略", "訊號", "已持續", "策略目前", "下一個交易日開盤"):
+            t.add_column(c, justify="right" if c == "已持續" else "left", no_wrap=c != "策略", overflow="fold")
         for r, side, days in sorted(ongoing, key=lambda x: x[2]):
             t.add_row(
                 r.stock_id,
@@ -458,6 +477,8 @@ def screen_report(
                 r.strategy.name,
                 label[side],
                 f"{days} 天",
+                _bought_text(r.state),
+                _action_text(r.state),
             )
         console.print(t)
     else:
@@ -478,6 +499,11 @@ def screen_report(
     elif any(r.strategy.forming for r in report.rows):
         console.print("③ 沒有形成中的型態。")
 
+    if new or ongoing:
+        console.print(
+            "[dim]「策略目前」「下一個交易日開盤」是照策略的規則、從指標都算得出來的第一天算的（和回測相同），"
+            "不是你實際有沒有買。[/dim]"
+        )
     for who, msg in report.errors:
         console.print(f"[red]{who}：{msg}[/red]")
     console.print(DISCLAIMER)
@@ -901,7 +927,7 @@ def _trade_rows(rb: RuleBacktest, trades: pd.DataFrame) -> Table:
             " [yellow]⚠ 漲停[/yellow]" if r["buy_at_limit"] else ""
         )
         if pd.isna(r["exit"]):
-            sell = ("[dim]持有中[/dim]", "—", "—")
+            sell = ("[dim]還沒賣出[/dim]", "—", "—")
         else:
             sell_price = _price(r["exit_price"]) + (
                 " [yellow]⚠ 跌停[/yellow]" if r["sell_at_limit"] else ""
@@ -951,8 +977,8 @@ def _backtest_rules(
         Panel.fit(
             f"[bold]{name}[/bold]  策略：{st.name}\n"
             f"買進：{describe(st.buy)}\n賣出：{describe(st.sell)}\n"
-            f"期間：{rb.start:%Y-%m-%d}{begin_note} ～ {res.returns.index[-1]:%Y-%m-%d}，從空手開始\n"
-            f"做法：買進條件成立後{when}買進，持有到賣出條件成立後{when}賣出；不加碼、不放空\n"
+            f"期間：{rb.start:%Y-%m-%d}{begin_note} ～ {res.returns.index[-1]:%Y-%m-%d}，一開始還沒買進\n"
+            f"做法：買進條件成立後{when}買進，賣出條件成立後{when}賣出；不加碼、不放空\n"
             f"價格：訊號用{PRICE_NAMES[adjust]}判斷；報酬包含股利\n"
             f"成本：手續費 {costs.commission:.4%}（折扣 {costs.discount:g}）、證交稅 {costs.tax:.1%}、"
             f"單邊滑價 {costs.slippage:.2%}",
@@ -977,14 +1003,11 @@ def _backtest_rules(
         )
 
     if end is None:
-        last, now, action = rb.latest()
-        action = {"buy": "買進", "sell": "賣出"}.get(action, "")
-        if execution == "open":
-            action = f"，下一個交易日開盤{action}" if action else ""
-        else:
-            action = f"，當天收盤{action}" if action else ""
+        state = rb.latest()
+        trade_at = "下一個交易日開盤" if execution == "open" else "當天收盤"
         console.print(
-            f"最新（{last:%Y-%m-%d} 收盤後）：照策略應該{'持有' if now else '空手'}{action}"
+            f"最新（{state.date:%Y-%m-%d} 收盤後）：策略目前{_bought_text(state)}；"
+            f"{trade_at}：{_action_text(state)}"
         )
     if plot:
         from hermes.cli.plots import plot_backtests
@@ -1085,7 +1108,7 @@ def backtest(
         for c in ("進場", "出場", "方向", "報酬", "持有天數"):
             tt.add_column(c, justify="right")
         for _, row in tr.iterrows():
-            ex = "持有中" if pd.isna(row["exit"]) else f"{row['exit']:%Y-%m-%d}"
+            ex = "還沒賣出" if pd.isna(row["exit"]) else f"{row['exit']:%Y-%m-%d}"
             tt.add_row(
                 f"{row['entry']:%Y-%m-%d}",
                 ex,
