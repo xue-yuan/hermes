@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   CandlestickSeries,
   HistogramSeries,
@@ -12,6 +12,7 @@ import {
   type Time,
 } from "lightweight-charts"
 import type { Backtest, Num, Prices, Signals } from "@/lib/api"
+import { price as priceText } from "@/lib/format"
 import { LINE_COLORS, alpha, axisNumber, baseOptions, chartColors } from "@/components/charts/theme"
 
 const PRICE_HEIGHT = 380
@@ -67,6 +68,55 @@ function signalsPaneCount(list: Signals[]): number {
   return list.reduce((n, s) => n + strategyPanes(s).length, 0)
 }
 
+/** 圖表給的時間可能是字串、年月日或秒數，都換成 YYYY-MM-DD。 */
+function day(t: Time): string {
+  if (typeof t === "string") return t
+  if (typeof t === "number") return new Date(t * 1000).toISOString().slice(0, 10)
+  return `${t.year}-${String(t.month).padStart(2, "0")}-${String(t.day).padStart(2, "0")}`
+}
+
+/**
+ * 圖上方的日期列，捲動時貼在頁首下面：圖很高的時候日期軸在最下面看不到。
+ * 游標指著圖時是那天的日期和開高低收；沒有指著圖時是畫面裡的日期範圍（拖動、縮放時跟著變）。
+ */
+function DateBar({
+  price,
+  hover,
+  range,
+}: {
+  price: Prices["series"]
+  hover: number | null
+  range: [string, string] | null
+}) {
+  const cell = (label: string, v: Num) => (
+    <span>
+      <span className="text-muted-foreground">{label} </span>
+      <span className="tabular-nums">{priceText(v)}</span>
+    </span>
+  )
+  return (
+    <div
+      className="sticky z-10 flex min-h-8 flex-wrap items-center gap-x-4 gap-y-0.5 rounded-md bg-card/95 px-2 py-1 text-sm backdrop-blur"
+      style={{ top: "var(--header-height, 0px)" }}
+    >
+      {hover !== null ? (
+        <>
+          <b className="tabular-nums">{price.date[hover]}</b>
+          {cell("開", price.open[hover])}
+          {cell("高", price.high[hover])}
+          {cell("低", price.low[hover])}
+          {cell("收", price.close[hover])}
+        </>
+      ) : range ? (
+        <span className="text-muted-foreground">
+          畫面裡是 <span className="text-foreground tabular-nums">{range[0]}</span> ～{" "}
+          <span className="text-foreground tabular-nums">{range[1]}</span>；游標移到圖上看那天的日期和價格
+        </span>
+      ) : null}
+    </div>
+  )
+}
+
 /**
  * 歷史買賣點的圖：最上面是股價（K 線、成交量），下面每個策略一段，畫策略用到的指標數值；
  * 實線是買賣條件裡的門檻，虛線是策略設定檔寫的參考線。買賣點標在每個策略的第一格。
@@ -89,11 +139,18 @@ export function SignalsChart({
 }) {
   const ref = useRef<HTMLDivElement>(null)
   const paneCount = signalsPaneCount(strategies)
+  const [hover, setHover] = useState<number | null>(null)
+  const [range, setRange] = useState<[string, string] | null>(null)
   useEffect(() => {
     if (!ref.current) return
     const c = chartColors(dark)
     const dates = price.date
     const chart = createChart(ref.current, baseOptions(dark))
+    const position = new Map(dates.map((d, i) => [d, i]))
+    chart.subscribeCrosshairMove((param) =>
+      setHover(param.time === undefined ? null : (position.get(day(param.time)) ?? null)),
+    )
+    chart.timeScale().subscribeVisibleTimeRangeChange((r) => setRange(r ? [day(r.from), day(r.to)] : null))
 
     const volume = chart.addSeries(HistogramSeries, {
       priceScaleId: "volume",
@@ -201,5 +258,10 @@ export function SignalsChart({
     return () => chart.remove()
   }, [price, strategies, backtests, dark, from, to])
 
-  return <div ref={ref} style={{ height: PRICE_HEIGHT + paneCount * PANE_HEIGHT }} className="w-full" />
+  return (
+    <>
+      <DateBar price={price} hover={hover} range={range} />
+      <div ref={ref} style={{ height: PRICE_HEIGHT + paneCount * PANE_HEIGHT }} className="w-full" />
+    </>
+  )
 }

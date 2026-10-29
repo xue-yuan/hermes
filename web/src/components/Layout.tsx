@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from "react"
+import { useEffect, useRef, useState, type FormEvent } from "react"
 import { Link, NavLink, Outlet, useNavigate } from "react-router"
 import { useQuery, useQueryClient } from "@tanstack/react-query"
 import { LogOut } from "lucide-react"
@@ -80,11 +80,27 @@ function PriceSwitch() {
   )
 }
 
+/** 頁首的高度（手機上會換行，高度會變），給要貼在頁首下面的東西用（例如買賣點圖的日期列）。 */
+function useHeaderHeight() {
+  const ref = useRef<HTMLElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (!el) return
+    const observer = new ResizeObserver(() =>
+      document.documentElement.style.setProperty("--header-height", `${el.offsetHeight}px`),
+    )
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
+  return ref
+}
+
 export function Layout({ email }: { email: string }) {
   const qc = useQueryClient()
+  const header = useHeaderHeight()
   return (
     <div className="min-h-svh">
-      <header className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
+      <header ref={header} className="sticky top-0 z-20 border-b bg-background/95 backdrop-blur">
         <div className="mx-auto flex max-w-7xl flex-wrap items-center gap-x-6 gap-y-2 px-4 py-2">
           <Link to="/">
             <span className="font-semibold">Hermes</span>
