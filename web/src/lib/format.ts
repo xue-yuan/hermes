@@ -46,7 +46,7 @@ export function tone(x: Num | undefined): string {
 }
 
 export function conditionState(streak: number): string {
-  if (streak === 1) return "成立（今天新觸發）"
+  if (streak === 1) return "成立（新觸發）"
   return streak > 1 ? `成立（已持續 ${streak} 天）` : "不成立"
 }
 

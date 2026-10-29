@@ -4,13 +4,32 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Input } from "@/components/ui/input"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ADJUSTED_HELP, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
+import { AdjustedHelp, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
 import { useOverview } from "@/components/Layout"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type StockInfo, type Tech } from "@/lib/api"
 import { indicator, price } from "@/lib/format"
 import { cn } from "@/lib/utils"
 import { useParam } from "@/pages/stock/shared"
+
+// 上次選的指標組存在這個瀏覽器，下次打開直接用；瀏覽器不讓存時用常用版
+const LAST_SET = "hermes-indicator-set"
+
+function lastSet(): string | null {
+  try {
+    return localStorage.getItem(LAST_SET)
+  } catch {
+    return null
+  }
+}
+
+function rememberSet(id: string) {
+  try {
+    localStorage.setItem(LAST_SET, id)
+  } catch {
+    // 存不了：只影響下次打開時的預設
+  }
+}
 
 /** 指標組在某一天的數值：只列數值，不判斷買賣。用實際成交價算，還原模式用還原價格。 */
 export function TechTab({ stock }: { stock: StockInfo }) {
@@ -21,17 +40,25 @@ export function TechTab({ stock }: { stock: StockInfo }) {
   const sets = (overview.data?.indicator_sets ?? []).filter(
     (s): s is { id: string; name: string; description: string; error: null } => s.error === null,
   )
-  const chosen = set || "common"
+  // 網址沒指定時用上次選的指標組（還在 indicators/ 裡才用），否則用常用版
+  const remembered = lastSet()
+  const chosen = set || (remembered && sets.some((s) => s.id === remembered) ? remembered : "common")
   const q = useQuery({
     queryKey: ["tech", stock.stock_id, chosen, day, adjusted],
     queryFn: () =>
       api<Tech>(`/api/stocks/${stock.stock_id}/tech${query({ set: chosen, date: day, adjusted: adjusted || null })}`),
+    // 要先知道有哪些指標組，才知道上次選的還在不在，免得先載入常用版又換掉
+    enabled: !!set || !overview.isPending,
   })
+  const choose = (id: string) => {
+    rememberSet(id)
+    setSet(id)
+  }
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end gap-3">
         <Field label="指標組">
-          <Select value={chosen} onValueChange={setSet}>
+          <Select value={chosen} onValueChange={choose}>
             <SelectTrigger className="w-full sm:w-64" aria-label="指標組">
               <SelectValue />
             </SelectTrigger>
@@ -65,15 +92,8 @@ export function TechTab({ stock }: { stock: StockInfo }) {
                 {q.data.date}　收盤 {price(q.data.close)}
                 <span className="ml-2 text-sm font-normal text-muted-foreground">（{priceName(q.data.adjusted)}）</span>
               </CardTitle>
-              <CardDescription>
-                {q.data.set.name}：只列出數值，不判斷買賣。
-                {q.data.adjusted ? (
-                  <>
-                    <br />
-                    {ADJUSTED_HELP}
-                  </>
-                ) : null}
-              </CardDescription>
+              <CardDescription>{q.data.set.name}：只列出數值，不判斷買賣。</CardDescription>
+              {q.data.adjusted ? <AdjustedHelp /> : null}
             </CardHeader>
             <CardContent>
               <Table>

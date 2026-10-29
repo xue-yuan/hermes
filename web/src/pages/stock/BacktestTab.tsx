@@ -5,12 +5,12 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EquityChart } from "@/components/charts/EquityChart"
-import { ADJUSTED_HELP, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
+import { AdjustedHelp, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type Backtest, type Metrics, type StockInfo, type Trade } from "@/lib/api"
 import { METRIC_HELP, METRIC_ROWS, pct, price, tone } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { COST_FIELDS, CostInputs, costText, type CostForm } from "@/pages/stock/costs"
+import { COST_FIELDS, CostSettings, DateInputs, costText, type CostForm } from "@/pages/stock/costs"
 import { StrategyRules, StrategySelect } from "@/pages/stock/shared"
 
 const KEYS = ["strategy", "start", "end", ...Object.keys(COST_FIELDS)] as const
@@ -167,19 +167,22 @@ export function BacktestTab({ stock, dark }: { stock: StockInfo; dark: boolean }
   }
   return (
     <div className="space-y-4">
-      <form onSubmit={submit} className="flex flex-wrap items-end gap-3">
-        <Field label="策略">
-          <StrategySelect value={draft.strategy} onChange={(v) => setDraft({ ...draft, strategy: v })} />
-        </Field>
-        <CostInputs
-          form={draft}
-          onChange={(f) => setDraft({ ...draft, ...f })}
-          first={stock.first_date}
-          last={stock.last_date}
-        />
-        <Button type="submit" disabled={!draft.strategy}>
-          回測
-        </Button>
+      <form onSubmit={submit} className="space-y-3">
+        <div className="flex flex-wrap items-end gap-3">
+          <Field label="策略">
+            <StrategySelect value={draft.strategy} onChange={(v) => setDraft({ ...draft, strategy: v })} />
+          </Field>
+          <DateInputs
+            form={draft}
+            onChange={(f) => setDraft({ ...draft, ...f })}
+            first={stock.first_date}
+            last={stock.last_date}
+          />
+          <Button type="submit" disabled={!draft.strategy}>
+            回測
+          </Button>
+        </div>
+        <CostSettings form={draft} onChange={(f) => setDraft({ ...draft, ...f })} />
       </form>
       {!form.strategy ? <p className="text-sm text-muted-foreground">選一個策略，按「回測」。</p> : null}
       {q.isFetching && !q.data ? <Loading /> : null}
@@ -214,14 +217,14 @@ function BacktestView({ b, dark }: { b: Backtest; dark: boolean }) {
             做法：買進條件成立後{when}買進，持有到賣出條件成立後{when}賣出；不加碼、不放空
           </p>
           <p>價格：訊號用{priceName(b.adjusted)}判斷；報酬包含股利</p>
-          {b.adjusted ? <p className="text-muted-foreground">{ADJUSTED_HELP}</p> : null}
+          {b.adjusted ? <AdjustedHelp /> : null}
           <p>成本：{costText(b.costs)}</p>
           {b.latest ? (
             <p className="rounded-md bg-muted/50 p-2">
               最新（{b.latest.date} 收盤後）：照策略應該{b.latest.holding ? "持有" : "空手"}
               {b.latest.action ? (
                 <b className={b.latest.action === "buy" ? "text-up" : "text-down"}>
-                  ，{b.execution === "open" ? "下一個交易日開盤" : "今天收盤"}
+                  ，{b.execution === "open" ? "下一個交易日開盤" : "當天收盤"}
                   {b.latest.action === "buy" ? "買進" : "賣出"}
                 </b>
               ) : null}

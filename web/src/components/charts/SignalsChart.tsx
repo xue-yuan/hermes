@@ -12,7 +12,7 @@ import {
   type Time,
 } from "lightweight-charts"
 import type { Backtest, Num, Prices, Signals } from "@/lib/api"
-import { LINE_COLORS, alpha, baseOptions, chartColors } from "@/components/charts/theme"
+import { LINE_COLORS, alpha, axisNumber, baseOptions, chartColors } from "@/components/charts/theme"
 
 const PRICE_HEIGHT = 380
 const PANE_HEIGHT = 200
@@ -24,21 +24,23 @@ function line(dates: string[], values: Num[]) {
   })
 }
 
-/** 實際交易的訊號日；最新一天收盤後的訊號隔天開盤才成交，還不在交易明細裡，也標出來。 */
+/**
+ * 實際交易的訊號日；最新一天收盤後的訊號隔天開盤才成交，還不在交易明細裡，也標出來。
+ * 只用箭頭（紅色向上買進、綠色向下賣出），不加文字：訊號靠很近時文字會疊在一起。
+ */
 function tradeMarkers(b: Backtest, up: string, down: string): SeriesMarker<Time>[] {
   const markers: SeriesMarker<Time>[] = []
   for (const t of b.trades) {
-    markers.push({ time: t.buy_signal, position: "belowBar", shape: "arrowUp", color: up, text: "買" })
-    if (t.sell_signal)
-      markers.push({ time: t.sell_signal, position: "aboveBar", shape: "arrowDown", color: down, text: "賣" })
+    markers.push({ time: t.buy_signal, position: "belowBar", shape: "arrowUp", color: up })
+    if (t.sell_signal) markers.push({ time: t.sell_signal, position: "aboveBar", shape: "arrowDown", color: down })
   }
   const marked = new Set(b.trades.flatMap((t) => [`${t.buy_signal}|buy`, `${t.sell_signal ?? ""}|sell`]))
   const action = b.latest?.action
   if (b.latest && action && !marked.has(`${b.latest.date}|${action}`))
     markers.push(
       action === "buy"
-        ? { time: b.latest.date, position: "belowBar", shape: "arrowUp", color: up, text: "買" }
-        : { time: b.latest.date, position: "aboveBar", shape: "arrowDown", color: down, text: "賣" },
+        ? { time: b.latest.date, position: "belowBar", shape: "arrowUp", color: up }
+        : { time: b.latest.date, position: "aboveBar", shape: "arrowDown", color: down },
     )
   return markers.sort((x, y) => (x.time < y.time ? -1 : x.time > y.time ? 1 : 0))
 }
@@ -116,6 +118,7 @@ export function SignalsChart({
       wickUpColor: c.up,
       wickDownColor: c.down,
       priceLineVisible: false,
+      priceFormat: { type: "custom", formatter: axisNumber, minMove: 0.01 },
     })
     candles.priceScale().applyOptions({ scaleMargins: { top: 0.05, bottom: 0.22 } })
     candles.setData(
@@ -163,6 +166,7 @@ export function SignalsChart({
                 color: lineColor,
                 lineWidth: isClose ? 1 : 2,
                 priceLineVisible: false,
+                priceFormat: { type: "custom", formatter: axisNumber, minMove: 0.0001 },
                 autoscaleInfoProvider: autoscale,
               },
               pane,

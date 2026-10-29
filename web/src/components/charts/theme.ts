@@ -32,6 +32,11 @@ export function alpha(hex: string, a: number): string {
   return `rgba(${(v >> 16) & 255}, ${(v >> 8) & 255}, ${v & 255}, ${a})`
 }
 
+/** 刻度和十字線的數字：去掉多餘的 0、加千分位；絕對值小於 1 的多留兩位（和表格的指標數值相同）。 */
+export function axisNumber(v: number): string {
+  return v.toLocaleString("zh-TW", { maximumFractionDigits: Math.abs(v) < 1 ? 4 : 2 })
+}
+
 export function baseOptions(dark: boolean): DeepPartial<ChartOptions> {
   const c = chartColors(dark)
   return {

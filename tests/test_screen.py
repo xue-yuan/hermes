@@ -59,7 +59,7 @@ def test_screen_command(setup, monkeypatch):
     monkeypatch.setenv("HERMES_STRATEGIES", str(strategies))
     result = CliRunner().invoke(app, ["screen", "1111", "2222"], env={"COLUMNS": "160"})
     assert result.exit_code == 0, result.output
-    for text in ("① 今天新觸發", "② 條件仍成立", "2222 的資料只到 2026-01-16"):
+    for text in ("① 新觸發（2026-01-19）", "② 條件仍成立", "2222 的資料只到 2026-01-16"):
         assert text in result.output
 
 

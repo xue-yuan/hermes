@@ -6,9 +6,20 @@ import { ApiError } from "@/lib/api"
 import { cn } from "@/lib/utils"
 
 export const DISCLAIMER = "※ 本工具僅供研究與教育用途，回測績效不代表未來報酬，不構成投資建議。"
+const ADJUSTED_TEXT =
+  "把除權息、減資、分割以前的股價按比例調整，扣掉這些事件造成的跳空（也叫「還原權值」），成交量也按股數比例調整。"
 /** 還原價格的白話說明：還原模式時，頁面上第一次出現「還原價格」的地方要附上。 */
-export const ADJUSTED_HELP =
-  "還原價格：把除權息、減資、分割以前的股價按比例調整，扣掉這些事件造成的跳空（也叫「還原權值」），成交量也按股數比例調整。"
+export const ADJUSTED_HELP = `還原價格：${ADJUSTED_TEXT}`
+
+/** 還原價格的說明，預設收起來：每一頁都看得到，看懂以後不佔版面。 */
+export function AdjustedHelp() {
+  return (
+    <details className="text-sm text-muted-foreground">
+      <summary className="cursor-pointer">還原價格是什麼</summary>
+      <p className="mt-1">{ADJUSTED_TEXT}</p>
+    </details>
+  )
+}
 
 /** 判斷用的價格：還原模式用還原價格，否則用實際成交價。每個模式只顯示自己那種價格。 */
 export function priceName(adjusted: boolean): string {

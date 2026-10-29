@@ -27,7 +27,7 @@ from hermes.technical import CATALOG
 
 
 def streak(flags: pd.Series) -> pd.Series:
-    """條件連續成立的天數，不成立的日子為 0。等於 1 的那天就是「今天新觸發」。"""
+    """條件連續成立的天數，不成立的日子為 0。等於 1 的那天就是「新觸發」。"""
     return flags.astype(int).groupby((~flags).cumsum()).cumsum()
 
 

@@ -398,7 +398,7 @@ def screen_report(
     ] = None,
     adjust: Annotated[bool, typer.Option("--adjust", help=ADJUST_HELP)] = False,
 ):
-    """每日選股報告：今天新觸發的訊號、條件仍成立的訊號、形成中。收盤後執行，決定下一個交易日開盤要不要買賣。"""
+    """每日選股報告：新觸發的訊號、條件仍成立的訊號、形成中。收盤後執行，決定下一個交易日開盤要不要買賣。"""
     ids = stocks or [item.stock_id for item in MarketDataService().list_watchlist()]
     if not ids:
         _fail("請指定股票代號，或先用 hermes watchlist add 加入自選股")
@@ -431,7 +431,7 @@ def screen_report(
     }
     new = report.triggered_today()
     if new:
-        t = Table(title="① 今天新觸發")
+        t = Table(title=f"① 新觸發（{report.latest_date:%Y-%m-%d}）")
         for c in ("代號", "名稱", "策略", "訊號", "收盤"):
             t.add_column(c, justify="right" if c == "收盤" else "left")
         for r, side in new:
@@ -444,7 +444,7 @@ def screen_report(
             )
         console.print(t)
     else:
-        console.print("① 今天沒有新觸發的訊號。")
+        console.print("① 這天沒有新觸發的訊號。")
 
     ongoing = report.ongoing()
     if ongoing:
@@ -754,7 +754,7 @@ def _signal_label(row: pd.Series) -> str:
 
 def _condition_state(streak: int) -> str:
     if streak == 1:
-        return "成立（今天新觸發）"
+        return "成立（新觸發）"
     return f"成立（已持續 {streak} 天）" if streak > 1 else "不成立"
 
 
@@ -982,7 +982,7 @@ def _backtest_rules(
         if execution == "open":
             action = f"，下一個交易日開盤{action}" if action else ""
         else:
-            action = f"，今天收盤{action}" if action else ""
+            action = f"，當天收盤{action}" if action else ""
         console.print(
             f"最新（{last:%Y-%m-%d} 收盤後）：照策略應該{'持有' if now else '空手'}{action}"
         )

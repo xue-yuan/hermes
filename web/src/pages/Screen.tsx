@@ -2,21 +2,33 @@ import { Link } from "react-router"
 import { useQuery } from "@tanstack/react-query"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { ADJUSTED_HELP, ErrorBox, Loading, Side, Warnings, priceName } from "@/components/common"
+import { AdjustedHelp, ErrorBox, Loading, Side, Warnings, priceName } from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type ScreenItem, type ScreenReport } from "@/lib/api"
 import { price } from "@/lib/format"
 
+// 手機上名稱放在代號下面、策略名稱可以換行，最右邊的訊號才不會被擠到畫面外面
 function StockCell({ r }: { r: ScreenItem }) {
   return (
     <>
-      <TableCell>
+      <TableCell className="align-top">
         <Link className="font-medium underline-offset-4 hover:underline" to={`/stocks/${r.stock_id}`}>
           {r.stock_id}
         </Link>
+        <div className="text-muted-foreground sm:hidden">{r.name}</div>
       </TableCell>
-      <TableCell>{r.name}</TableCell>
-      <TableCell>{r.strategy}</TableCell>
+      <TableCell className="hidden align-top sm:table-cell">{r.name}</TableCell>
+      <TableCell className="whitespace-normal align-top">{r.strategy}</TableCell>
+    </>
+  )
+}
+
+function StockHeads() {
+  return (
+    <>
+      <TableHead>代號</TableHead>
+      <TableHead className="hidden sm:table-cell">名稱</TableHead>
+      <TableHead>策略</TableHead>
     </>
   )
 }
@@ -53,13 +65,8 @@ export function ScreenPage() {
             資料日期 <b className="text-foreground">{r.latest_date}</b>　{r.stocks} 檔股票 × {r.strategies} 個策略
             <br />
             價格：用{priceName(r.adjusted)}判斷
-            {r.adjusted ? (
-              <>
-                <br />
-                {ADJUSTED_HELP}
-              </>
-            ) : null}
           </CardDescription>
+          {r.adjusted ? <AdjustedHelp /> : null}
         </CardHeader>
       </Card>
       <Warnings
@@ -72,16 +79,14 @@ export function ScreenPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>① 今天新觸發</CardTitle>
+          <CardTitle>① 新觸發（{r.latest_date}）</CardTitle>
         </CardHeader>
         <CardContent>
           {r.triggered.length ? (
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>代號</TableHead>
-                  <TableHead>名稱</TableHead>
-                  <TableHead>策略</TableHead>
+                  <StockHeads />
                   <TableHead>訊號</TableHead>
                   <TableHead className="text-right">收盤</TableHead>
                 </TableRow>
@@ -90,16 +95,16 @@ export function ScreenPage() {
                 {r.triggered.map((t) => (
                   <TableRow key={`${t.stock_id}-${t.strategy_id}-${t.side}`}>
                     <StockCell r={t} />
-                    <TableCell>
+                    <TableCell className="align-top">
                       <Side side={t.side} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{price(t.close)}</TableCell>
+                    <TableCell className="text-right align-top tabular-nums">{price(t.close)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           ) : (
-            <p className="text-sm text-muted-foreground">今天沒有新觸發的訊號。</p>
+            <p className="text-sm text-muted-foreground">這天沒有新觸發的訊號。</p>
           )}
         </CardContent>
       </Card>
@@ -113,9 +118,7 @@ export function ScreenPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>代號</TableHead>
-                  <TableHead>名稱</TableHead>
-                  <TableHead>策略</TableHead>
+                  <StockHeads />
                   <TableHead>訊號</TableHead>
                   <TableHead className="text-right">已持續</TableHead>
                 </TableRow>
@@ -124,10 +127,10 @@ export function ScreenPage() {
                 {r.ongoing.map((t) => (
                   <TableRow key={`${t.stock_id}-${t.strategy_id}-${t.side}`}>
                     <StockCell r={t} />
-                    <TableCell>
+                    <TableCell className="align-top">
                       <Side side={t.side} />
                     </TableCell>
-                    <TableCell className="text-right tabular-nums">{t.days} 天</TableCell>
+                    <TableCell className="text-right align-top tabular-nums">{t.days} 天</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -143,7 +146,7 @@ export function ScreenPage() {
           <CardHeader>
             <CardTitle>③ 形成中</CardTitle>
             <CardDescription>
-              策略寫的「形成中」條件今天成立、還沒觸發買進。例如 Darvas
+              策略寫的「形成中」條件在這天成立、還沒觸發買進。例如 Darvas
               箱型：箱子已經成形，收盤還在箱頂和箱底之間，等突破箱頂。
             </CardDescription>
           </CardHeader>
@@ -153,7 +156,7 @@ export function ScreenPage() {
                 <TableHeader>
                   <TableRow>
                     <TableHead>股票</TableHead>
-                    <TableHead>策略／今天的數值</TableHead>
+                    <TableHead>策略／這天的數值</TableHead>
                     <TableHead className="text-right">已持續</TableHead>
                   </TableRow>
                 </TableHeader>

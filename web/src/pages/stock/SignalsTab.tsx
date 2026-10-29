@@ -14,6 +14,9 @@ import { StrategyChecks, StrategyRules, useParam, useParamList, yearsBefore } fr
 
 type SignalRow = Signals["rows"][number]
 
+// 表格預設只列新觸發；條件連續成立的每一天都列的話，狀態類的條件一年可以有上百列
+const isNew = (r: Streaks) => r.buy_streak === 1 || r.sell_streak === 1
+
 // 欄位太多時表格可以左右捲動，日期和收盤固定在左邊；要有底色，捲動時才不會被後面的欄位蓋過去
 const STICKY_DATE = "sticky left-0 z-10 w-28 min-w-28 bg-card"
 const STICKY_CLOSE = "sticky left-28 z-10 w-20 min-w-20 bg-card shadow-[inset_-1px_0_0_var(--color-border)]"
@@ -165,17 +168,23 @@ export function SignalsTab({ stock, dark }: { stock: StockInfo; dark: boolean })
           {bt.results.map((q, i) => (q.error ? <ErrorBox key={strategies[i]} error={q.error} /> : null))}
           <div className="space-y-1 text-sm text-muted-foreground">
             <p>
-              最上面是股價（{name}
-              ）；下面每個策略一段，畫策略用到的指標，每一格的左上角寫策略名稱和線的名稱。跟股價同單位的指標（均線、SAR
-              這類）和收盤價（灰線）畫在同一格，其他指標各自一格。黃色實線是買賣條件裡的門檻，灰色虛線是策略另外寫的參考線（只畫線，不影響買賣）。
+              <span className="text-up">▲</span> 買進、<span className="text-down">▼</span>{" "}
+              賣出：實際交易的訊號日，下一個交易日開盤成交。買賣判斷用{name}。
             </p>
-            <p>
-              ▲ 買進、▼
-              賣出標在每個策略的第一格，是實際交易的訊號日，下一個交易日開盤成交；持有中又出現的買進訊號、空手時的賣出訊號不會交易，不標。
-            </p>
-            <p>
-              買賣判斷用{name}。{adjusted ? ADJUSTED_HELP : null}
-            </p>
+            <details>
+              <summary className="cursor-pointer">圖怎麼看</summary>
+              <div className="mt-1 space-y-1">
+                <p>
+                  最上面是股價（{name}
+                  ）；下面每個策略一段，畫策略用到的指標，每一格的左上角寫策略名稱和線的名稱。跟股價同單位的指標（均線、SAR
+                  這類）和收盤價（灰線）畫在同一格，其他指標各自一格。黃色實線是買賣條件裡的門檻，灰色虛線是策略另外寫的參考線（只畫線，不影響買賣）。
+                </p>
+                <p>
+                  箭頭標在每個策略的第一格。照策略已經買進、還沒賣出時又出現的買進訊號，和還沒買進時的賣出訊號，不會交易，不標。
+                </p>
+                {adjusted ? <p>{ADJUSTED_HELP}</p> : null}
+              </div>
+            </details>
           </div>
           <div className="grid gap-4 lg:grid-cols-2">
             {sig.list.map((data) => (
@@ -221,38 +230,62 @@ function StrategyCard({ data, b }: { data: Signals; b: Backtest | undefined }) {
   )
 }
 
-/** 表格：一個策略時直接列出；多個策略時用分頁切換，第一頁是總表。 */
+/** 表格：一個策略時直接列出；多個策略時用分頁切換，第一頁是總表。預設只列新觸發。 */
 function SignalTables({ list, ids, failed }: { list: Signals[]; ids: string[]; failed: string[] }) {
   const [tab, setTab] = useParam("table")
-  if (ids.length === 1) return <SignalTable data={list[0]} />
+  const [rows, setRows] = useParam("rows")
+  const everyDay = rows === "all"
+  const picker = (
+    <Field label="表格列出" group>
+      <ToggleGroup
+        type="single"
+        variant="outline"
+        value={everyDay ? "all" : "new"}
+        onValueChange={(v) => v && setRows(v === "all" ? "all" : null)}
+      >
+        <ToggleGroupItem value="new">只列新觸發</ToggleGroupItem>
+        <ToggleGroupItem value="all">條件成立的每一天</ToggleGroupItem>
+      </ToggleGroup>
+    </Field>
+  )
+  if (ids.length === 1)
+    return (
+      <div className="space-y-3">
+        {picker}
+        <SignalTable data={list[0]} everyDay={everyDay} />
+      </div>
+    )
   const current = list.some((d) => d.strategy.id === tab) ? tab : "all"
   return (
-    <Tabs value={current} onValueChange={(v) => setTab(v === "all" ? null : v)}>
-      <TabsList className="flex h-auto flex-wrap">
-        <TabsTrigger value="all">總表</TabsTrigger>
-        {list.map((d) => (
-          <TabsTrigger key={d.strategy.id} value={d.strategy.id}>
-            {d.strategy.name}
-          </TabsTrigger>
-        ))}
-      </TabsList>
-      <TabsContent value="all">
-        <SummaryTable list={list} failed={failed} />
-      </TabsContent>
-      {list.map((d) => (
-        <TabsContent key={d.strategy.id} value={d.strategy.id}>
-          <SignalTable data={d} />
+    <div className="space-y-3">
+      {picker}
+      <Tabs value={current} onValueChange={(v) => setTab(v === "all" ? null : v)}>
+        <TabsList className="flex h-auto flex-wrap">
+          <TabsTrigger value="all">總表</TabsTrigger>
+          {list.map((d) => (
+            <TabsTrigger key={d.strategy.id} value={d.strategy.id}>
+              {d.strategy.name}
+            </TabsTrigger>
+          ))}
+        </TabsList>
+        <TabsContent value="all">
+          <SummaryTable list={list} failed={failed} everyDay={everyDay} />
         </TabsContent>
-      ))}
-    </Tabs>
+        {list.map((d) => (
+          <TabsContent key={d.strategy.id} value={d.strategy.id}>
+            <SignalTable data={d} everyDay={everyDay} />
+          </TabsContent>
+        ))}
+      </Tabs>
+    </div>
   )
 }
 
 /** 總表：任一策略有訊號的日子，每個策略一欄；那天沒有訊號的策略寫「—」。 */
-function SummaryTable({ list, failed }: { list: Signals[]; failed: string[] }) {
+function SummaryTable({ list, failed, everyDay }: { list: Signals[]; failed: string[]; everyDay: boolean }) {
   const byDate = new Map<string, { close: number; cells: (SignalRow | undefined)[] }>()
   list.forEach((d, k) => {
-    for (const r of d.rows) {
+    for (const r of everyDay ? d.rows : d.rows.filter(isNew)) {
       const row = byDate.get(r.date) ?? { close: r.close, cells: list.map(() => undefined) }
       row.cells[k] = r
       byDate.set(r.date, row)
@@ -267,7 +300,8 @@ function SummaryTable({ list, failed }: { list: Signals[]; failed: string[] }) {
           總表：{list[0].range.start} ～ {list[0].range.end}
         </CardTitle>
         <CardDescription>
-          列出任一策略的條件成立的日子；「—」是那個策略當天沒有訊號。指標數值看各策略的分頁。
+          列出任一策略{everyDay ? "的條件成立" : "有新觸發"}的日子；「—」是那個策略當天沒有{everyDay ? "" : "新"}
+          訊號。指標數值看各策略的分頁。
           {failed.length ? `有 ${failed.length} 個策略出錯，沒有列入（見上面）。` : null}
         </CardDescription>
       </CardHeader>
@@ -301,16 +335,17 @@ function SummaryTable({ list, failed }: { list: Signals[]; failed: string[] }) {
             </TableBody>
           </Table>
         ) : (
-          <p className="text-sm text-muted-foreground">這段期間沒有任何訊號。</p>
+          <p className="text-sm text-muted-foreground">這段期間沒有任何{everyDay ? "" : "新觸發的"}訊號。</p>
         )}
       </CardContent>
     </Card>
   )
 }
 
-function SignalTable({ data }: { data: Signals }) {
+function SignalTable({ data, everyDay }: { data: Signals; everyDay: boolean }) {
   const sm = data.summary
   const cols = data.indicator_columns
+  const rows = everyDay ? data.rows : data.rows.filter(isNew)
   return (
     <Card>
       <CardHeader>
@@ -323,7 +358,7 @@ function SignalTable({ data }: { data: Signals }) {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {data.rows.length ? (
+        {rows.length ? (
           <Table>
             <TableHeader>
               <TableRow>
@@ -338,7 +373,7 @@ function SignalTable({ data }: { data: Signals }) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {data.rows.map((r) => (
+              {rows.map((r) => (
                 <TableRow key={r.date}>
                   <TableCell className={STICKY_DATE}>{r.date}</TableCell>
                   <TableCell className={cn(STICKY_CLOSE, "text-right tabular-nums")}>{price(r.close)}</TableCell>
@@ -355,7 +390,7 @@ function SignalTable({ data }: { data: Signals }) {
             </TableBody>
           </Table>
         ) : (
-          <p className="text-sm text-muted-foreground">這段期間沒有任何訊號。</p>
+          <p className="text-sm text-muted-foreground">這段期間沒有任何{everyDay ? "" : "新觸發的"}訊號。</p>
         )}
       </CardContent>
     </Card>

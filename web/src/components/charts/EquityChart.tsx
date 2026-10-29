@@ -35,8 +35,12 @@ export function EquityChart({ curves, dark }: { curves: Curves; dark: boolean })
       )
       .setData(line(date, curves.benchmark.drawdown, 100))
 
+    // 多個策略時部位一個策略一條（由上到下和表格同順序），0、1 的線疊在一起看不出是誰
+    const lanes = curves.series.length > 1
     curves.series.forEach((s, k) => {
       const color = LINE_COLORS[k % LINE_COLORS.length]
+      const lane = curves.series.length - 1 - k
+      const position = lanes ? s.position.map((v) => (typeof v === "number" ? lane + 0.8 * v : v)) : s.position
       chart
         .addSeries(LineSeries, { color, lineWidth: 2, title: s.name, priceLineVisible: false })
         .setData(line(date, s.equity))
@@ -48,8 +52,20 @@ export function EquityChart({ curves, dark }: { curves: Curves; dark: boolean })
         )
         .setData(line(date, s.drawdown, 100))
       chart
-        .addSeries(LineSeries, { color, lineWidth: 1, priceLineVisible: false, lastValueVisible: false }, 2)
-        .setData(line(date, s.position))
+        .addSeries(
+          LineSeries,
+          {
+            color,
+            lineWidth: 1,
+            priceLineVisible: false,
+            lastValueVisible: false,
+            crosshairMarkerVisible: !lanes,
+            // 分開畫的時候刻度的數字沒有意義，不顯示（把刻度整個藏起來的話，圖會畫不出來）
+            ...(lanes ? { priceFormat: { type: "custom" as const, formatter: () => "", minMove: 0.01 } } : {}),
+          },
+          2,
+        )
+        .setData(line(date, position))
     })
     // 只有淨值用對數刻度；回撤是負數、部位是 0～1，要用一般刻度
     chart.priceScale("right", 0).applyOptions({ mode: PriceScaleMode.Logarithmic })

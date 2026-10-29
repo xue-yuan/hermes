@@ -5,13 +5,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { EquityChart } from "@/components/charts/EquityChart"
-import { ADJUSTED_HELP, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
+import { AdjustedHelp, ErrorBox, Field, Loading, Warnings, priceName } from "@/components/common"
 import { useAdjusted } from "@/hooks/useAdjusted"
 import { api, query, type Compare, type Metrics, type StockInfo } from "@/lib/api"
 import { METRIC_HELP, SORT_LABELS, num, pct, tone } from "@/lib/format"
 import { cn } from "@/lib/utils"
-import { COST_FIELDS, CostInputs, costText } from "@/pages/stock/costs"
-import { EQUITY_CAPTION, MetricHelp } from "@/pages/stock/BacktestTab"
+import { COST_FIELDS, CostSettings, DateInputs, costText } from "@/pages/stock/costs"
+import { MetricHelp } from "@/pages/stock/BacktestTab"
 import { StrategyChecks } from "@/pages/stock/shared"
 import { useSearchParams } from "react-router"
 
@@ -25,6 +25,10 @@ const RANK: [string, string, (m: Metrics) => string, string?][] = [
   ["exposure", "持倉比例", (m) => pct(m.exposure, 1)],
   ["psr", "PSR", (m) => pct(m.psr, 1)],
 ]
+
+// 部位的線一個策略一條、上下分開，疊在一起看不出是誰
+const COMPARE_CAPTION =
+  "上：淨值，一開始的資金當成 1，之後變成多少（對數刻度，同樣幾 % 的漲跌看起來一樣長）；中：回撤，離之前最高的淨值跌了幾 %；下：部位，每個策略一條，由上到下和表格的順序相同，凸起來的期間是策略買進以後、賣出以前。"
 
 /** 並排比較設定檔策略，附上買進持有。機器學習策略要長時間訓練，網頁不提供。 */
 export function CompareTab({ stock, dark }: { stock: StockInfo; dark: boolean }) {
@@ -72,7 +76,7 @@ export function CompareTab({ stock, dark }: { stock: StockInfo; dark: boolean })
           <StrategyChecks value={draft.s} onChange={(s) => setDraft({ ...draft, s })} />
         </Field>
         <div className="flex flex-wrap items-end gap-3">
-          <CostInputs
+          <DateInputs
             form={draft}
             onChange={(f) => setDraft({ ...draft, ...f })}
             first={stock.first_date}
@@ -96,6 +100,7 @@ export function CompareTab({ stock, dark }: { stock: StockInfo; dark: boolean })
             比較
           </Button>
         </div>
+        <CostSettings form={draft} onChange={(f) => setDraft({ ...draft, ...f })} />
       </form>
       {!chosen.length ? <p className="text-sm text-muted-foreground">勾選要比較的策略，按「比較」。</p> : null}
       {q.isFetching && !q.data ? <Loading /> : null}
@@ -114,9 +119,10 @@ function CompareView({ c, dark }: { c: Compare; dark: boolean }) {
             策略比較（{c.start} ～ {c.end}，依 {SORT_LABELS[c.sort] ?? c.sort} 排序）
           </CardTitle>
           <CardDescription>
-            訊號用{priceName(c.adjusted)}判斷，報酬包含股利。{c.adjusted ? ADJUSTED_HELP : null}成本：
-            {costText(c.costs)}；{c.execution === "open" ? "隔天開盤" : "當天收盤"}成交。
+            訊號用{priceName(c.adjusted)}判斷，報酬包含股利。成本：{costText(c.costs)}；
+            {c.execution === "open" ? "隔天開盤" : "當天收盤"}成交。
           </CardDescription>
+          {c.adjusted ? <AdjustedHelp /> : null}
         </CardHeader>
         <CardContent>
           <Table>
@@ -153,7 +159,7 @@ function CompareView({ c, dark }: { c: Compare; dark: boolean }) {
       <Card className="py-2">
         <CardContent className="px-2">
           <EquityChart curves={c.curves} dark={dark} />
-          <p className="px-2 text-xs text-muted-foreground">{EQUITY_CAPTION}</p>
+          <p className="px-2 text-xs text-muted-foreground">{COMPARE_CAPTION}</p>
         </CardContent>
       </Card>
       <p className="text-xs text-muted-foreground">
